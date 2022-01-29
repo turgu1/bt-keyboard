@@ -12,8 +12,8 @@ The class named BTKeyboard waits for a keyboard to be available for pairing thro
 |:-----------:|------------------|
 | 0x00        | No key received (returned by `get_ascii_char()` when no key available) |
 | 0x01 - 0x1A | Ctrl-A .. Ctrl-Z |
-| 0x07        | Tab key          |
 | 0x08        | Backspace key    |
+| 0x09        | Tab key          |
 | 0x0D        | Return key       |
 | 0x1B        | ESC key          |
 | 0x20 - 0x7E | ASCII codes      |
