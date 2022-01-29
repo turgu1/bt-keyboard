@@ -4,7 +4,7 @@
 
 This is a demonstration of an external Bluetooth keyboard sending characters to an ESP32.
 
-The class named BTKeyboard waits for a keyboard to be available for pairing. It will then cumulate scan codes in a queue to be processed. The class methods available allow for the retrieval of the low-level key scan codes transmitted by the keyboard (`bool wait_for_low_event(BTKeyboard::KeyInfo & inf)` method) or the ASCII characters augmented with function keys values (`char wait_for_ascii_char()` or `char get_ascii_char()` methods). The following list the character values returned (support of other keyboard keys may be added in a future release):
+The class named BTKeyboard waits for a keyboard to be available for pairing through the `BTKeyboard::devices_scan()` method (must be called by the application). It will then cumulate scan codes in a queue to be processed. The class methods available allow for the retrieval of the low-level key scan codes transmitted by the keyboard (`bool wait_for_low_event(BTKeyboard::KeyInfo & inf)` method) or the ASCII characters augmented with function keys values (`char wait_for_ascii_char()` or `char get_ascii_char()` methods). The following list the character values returned (support of other keyboard keys may be added in a future release):
 
 | Values      | Description      |
 |:-----------:|------------------|
@@ -31,8 +31,12 @@ The class named BTKeyboard waits for a keyboard to be available for pairing. It 
 | 0x97        | DownArrow key    |
 | 0x98        | UpArrow key      |
 
-The returned scan codes in the BTKeyboard::KeyInfo structure are defined in chapter 10 of https://usb.org/sites/default/files/hut1_21.pdf . Up to three keys can be pressed at the same time. The corresponging scan codes are located in the `keys[3]` field. The `modifier` field contains the CTRL/SHIFT/ALT/META left and right key modifier info.
+The returned scan codes in the BTKeyboard::KeyInfo structure are defined in chapter 10 of https://usb.org/sites/default/files/hut1_22.pdf and are usually supplied directly by the keyboard. The BTKeyboard class supports up to three keys pressed at the same time. The corresponging scan codes are located in the `keys[3]` field. The `modifier` field contains the CTRL/SHIFT/ALT/META left and right key modifier info.
 
-The main program is a simple demonstration of the usage of the class. The author is using a Logitech K380 keyboard for this demo. Other Bluetooth keyboards may work but may require some modification.
+The main program is a simple demonstration of the usage of the class. The author is using a Logitech K380 keyboard for this demo. Other Bluetooth keyboards may work but may require some modification (mainly adding other key scan codes).
+
+The `sdkconfig.defaults` file identifies the ESP-IDF sdkconfig parameters that are required to have this demo working.
 
 A bug with ESP-IDF 4.3.x may cause an internal stack overflow. Seems to be corrected in 4.4.
+
+This is not ready yet as testing with ESP-IDF 4.4 is ongoing.
