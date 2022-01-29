@@ -1,6 +1,8 @@
 # ESP32 ESP-IDF Bluetooth keyboard input demo
 
-(Work in progress... updating for ESP-IDF V4.4)
+(Updated 2022/01/29)
+
+(Work in progress... updated for ESP-IDF V4.4)
 
 This is a demonstration of an external Bluetooth keyboard sending characters to an ESP32.
 
@@ -39,7 +41,19 @@ The `sdkconfig.defaults` file identifies the ESP-IDF sdkconfig parameters that a
 
 A bug with ESP-IDF 4.3.x may cause an internal stack overflow. Seems to be corrected in 4.4.
 
-This is not ready yet as testing with ESP-IDF 4.4 is ongoing: 
+This is not ready yet as testing with ESP-IDF 4.4 is ongoing. Seems to work fine at this point in time. 
 
-- raised an issue to the ESP-IDF team as the behavior is wrong with v4.4.
-- waiting for an answer
+Please be sure that you have installed the ESP-IDF v4.4 (examples are for Linux/MacOS):
+
+```
+cd ~/esp
+git clone -b release/v4.4 --recursive https://github.com/espressif/esp-idf.git
+```
+
+... and updated it to the last v4.4 updates from time to time (git pull):
+
+```
+cd ~/esp/esp-idf
+git pull
+git submodule --update --init --recursive
+```

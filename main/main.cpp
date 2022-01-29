@@ -31,10 +31,8 @@ extern "C" {
 
           if ((ch >= ' ') && (ch < 127)) std::cout << ch << std::flush; 
           else  {
-            std::cout << '[' << +ch << ']' << ch << std::flush;
-            printf("[%d]", ch);
-            putchar(ch);
-          }
+            std::cout << '[' << +ch << ']' << std::flush;
+           }
         #else
           BTKeyboard::KeyInfo inf;
           
