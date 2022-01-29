@@ -33,10 +33,13 @@ The class named BTKeyboard waits for a keyboard to be available for pairing thro
 
 The returned scan codes in the BTKeyboard::KeyInfo structure are defined in chapter 10 of https://usb.org/sites/default/files/hut1_22.pdf and are usually supplied directly by the keyboard. The BTKeyboard class supports up to three keys pressed at the same time. The corresponging scan codes are located in the `keys[3]` field. The `modifier` field contains the CTRL/SHIFT/ALT/META left and right key modifier info.
 
-The main program is a simple demonstration of the usage of the class. The author is using a Logitech K380 keyboard for this demo. Other Bluetooth keyboards may work but may require some modification (mainly adding other key scan codes).
+The main program is a simple demonstration of the usage of the class. The author is using a Logitech K380 keyboard (standard Bluetooth keyboard, not a BLE) for this demo. Other Bluetooth keyboards may work but may require some modification (mainly adding other key scan codes).
 
 The `sdkconfig.defaults` file identifies the ESP-IDF sdkconfig parameters that are required to have this demo working.
 
 A bug with ESP-IDF 4.3.x may cause an internal stack overflow. Seems to be corrected in 4.4.
 
-This is not ready yet as testing with ESP-IDF 4.4 is ongoing.
+This is not ready yet as testing with ESP-IDF 4.4 is ongoing: 
+
+- raised an issue to the ESP-IDF team as the behavior is wrong with v4.4.
+- waiting for an answer

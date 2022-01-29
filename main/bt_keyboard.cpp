@@ -476,7 +476,7 @@ BTKeyboard::bt_gap_event_handler(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_para
     case ESP_BT_GAP_DISC_STATE_CHANGED_EVT: {
       ESP_LOGV(TAG, "BT GAP DISC_STATE %s", (param->disc_st_chg.state == ESP_BT_GAP_DISCOVERY_STARTED) ? "START" : "STOP");
       if (param->disc_st_chg.state == ESP_BT_GAP_DISCOVERY_STOPPED) {
-          SEND_BT_CB();
+        SEND_BT_CB();
       }
       break;
     }
@@ -485,10 +485,10 @@ BTKeyboard::bt_gap_event_handler(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_para
       break;
     }
     case ESP_BT_GAP_KEY_NOTIF_EVT:
-      ESP_LOGD(TAG, "BT GAP KEY_NOTIF passkey:%d", param->key_notif.passkey);
+      ESP_LOGI(TAG, "BT GAP KEY_NOTIF passkey:%d", param->key_notif.passkey);
       break;
     case ESP_BT_GAP_MODE_CHG_EVT:
-      ESP_LOGD(TAG, "BT GAP MODE_CHG_EVT mode:%d", param->mode_chg.mode);
+      ESP_LOGI(TAG, "BT GAP MODE_CHG_EVT mode:%d", param->mode_chg.mode);
       break;
     default:
       ESP_LOGV(TAG, "BT GAP EVENT %s", bt_gap_evt_str(event));
@@ -771,22 +771,23 @@ BTKeyboard::hidh_callback(void * handler_args, esp_event_base_t base, int32_t id
   esp_hidh_event_data_t * param = (esp_hidh_event_data_t *) event_data;
 
   switch (event) {
-    case ESP_HIDH_OPEN_EVENT: {
-      const uint8_t *bda = esp_hidh_dev_bda_get(param->open.dev);
-      ESP_LOGD(TAG, ESP_BD_ADDR_STR " OPEN: %s", ESP_BD_ADDR_HEX(bda), esp_hidh_dev_name_get(param->open.dev));
-      esp_hidh_dev_dump(param->open.dev, stdout);
-      break;
-    }
-    // { // Code from 4.4-rc1 ...
-    //   if (param->open.status == ESP_OK) {
-    //     const uint8_t *bda = esp_hidh_dev_bda_get(param->open.dev);
-    //     ESP_LOGD(TAG, ESP_BD_ADDR_STR " OPEN: %s", ESP_BD_ADDR_HEX(bda), esp_hidh_dev_name_get(param->open.dev));
-    //     esp_hidh_dev_dump(param->open.dev, stdout);
-    //   } else {
-    //     ESP_LOGE(TAG, " OPEN failed!");
-    //   }
+    case ESP_HIDH_OPEN_EVENT: 
+    // { // Code for ESP-IDF 4.3.1
+    //   const uint8_t *bda = esp_hidh_dev_bda_get(param->open.dev);
+    //   ESP_LOGD(TAG, ESP_BD_ADDR_STR " OPEN: %s", ESP_BD_ADDR_HEX(bda), esp_hidh_dev_name_get(param->open.dev));
+    //   esp_hidh_dev_dump(param->open.dev, stdout);
     //   break;
     // }
+    { // Code for ESP-IDF 4.4
+      if (param->open.status == ESP_OK) {
+        const uint8_t *bda = esp_hidh_dev_bda_get(param->open.dev);
+        ESP_LOGD(TAG, ESP_BD_ADDR_STR " OPEN: %s", ESP_BD_ADDR_HEX(bda), esp_hidh_dev_name_get(param->open.dev));
+        esp_hidh_dev_dump(param->open.dev, stdout);
+      } else {
+        ESP_LOGE(TAG, " OPEN failed!");
+      }
+      break;
+    }
     case ESP_HIDH_BATTERY_EVENT: {
       const uint8_t *bda = esp_hidh_dev_bda_get(param->battery.dev);
       ESP_LOGD(TAG, ESP_BD_ADDR_STR " BATTERY: %d%%", ESP_BD_ADDR_HEX(bda), param->battery.level);
