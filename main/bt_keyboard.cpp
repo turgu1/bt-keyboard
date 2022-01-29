@@ -350,8 +350,8 @@ BTKeyboard::setup()
   ESP_ERROR_CHECK(esp_ble_gattc_register_callback(esp_hidh_gattc_event_handler));
   esp_hidh_config_t config = {
     .callback = hidh_callback,
-  //  .event_stack_size = 4096,
-  //  .callback_arg = nullptr
+    .event_stack_size = 4096, // Required with ESP-IDF 4.4
+    .callback_arg = nullptr   // idem
   };
   ESP_ERROR_CHECK(esp_hidh_init(&config));
 

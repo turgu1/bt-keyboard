@@ -2,7 +2,7 @@
 
 This is a demonstration of an external Bluetooth keyboard sending characters to an ESP32.
 
-Class named BTKeyboard wait for a keyboard to be available for pairing. It will then cumulate scan codes in a queue to be processed. The class methods available allow for the retrieval of the low-level key scan codes transmitted by the keyboard (`wait_for_low_event(BTKeyboard::KeyInfo & inf)` method) or the ASCII characters augmented with function keys values (`char wait_for_ascii_char()` method). The following list the character values returned:
+The class named BTKeyboard waits for a keyboard to be available for pairing. It will then cumulate scan codes in a queue to be processed. The class methods available allow for the retrieval of the low-level key scan codes transmitted by the keyboard (`wait_for_low_event(BTKeyboard::KeyInfo & inf)` method) or the ASCII characters augmented with function keys values (`char wait_for_ascii_char()` method). The following list the character values returned:
 
 | Values      | Description      |
 |:-----------:|------------------|
@@ -18,4 +18,6 @@ Class named BTKeyboard wait for a keyboard to be available for pairing. It will 
 | 0x8E        | ScrollLock       |
 | 0x8F        | Pause            |
 
-The main program is a simple demonstration of the usage of the class. The author is using a Logitech K380 keyboard for this demo. Other bluetooth keybpard may work but may require some modification.
+The main program is a simple demonstration of the usage of the class. The author is using a Logitech K380 keyboard for this demo. Other Bluetooth keyboards may work but may require some modification.
+
+A bug with ESP-IDF 4.3.x may cause an internal stack overflow. Seems to be corrected in 4.4.
