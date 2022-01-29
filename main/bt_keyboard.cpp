@@ -34,7 +34,9 @@ const char BTKeyboard::shift_trans_dict[] =
   "\200\200"                                            // CAPS LOC
   "\201\201\202\202\203\203\204\204\205\205\206\206"    // F1..F6
   "\207\207\210\210\211\211\212\212\213\213\214\214"    // F7..F12
-  "\215\215\216\216\217\217";                           // PrintScreen ScrollLock Pause
+  "\215\215\216\216\217\217"                            // PrintScreen ScrollLock Pause
+  "\220\220\221\221\222\222\177\177"                    // Insert Home PageUp Delete
+  "\223\223\224\224\225\225\226\226\227\227\230\230";   // End PageDown Right Left Dow Up
 
 const char * 
 BTKeyboard::ble_addr_type_str(esp_ble_addr_type_t ble_addr_type)
@@ -870,7 +872,7 @@ BTKeyboard::wait_for_ascii_char(bool forever)
           return last_ch = (ch - 3);
         }
       }
-      else if (ch <= 0x48) {
+      else if (ch <= 0x52) {
         if ((uint8_t) inf.modifier & SHIFT_MASK) {
           repeat_period = pdMS_TO_TICKS(500);
           return last_ch = shift_trans_dict[((ch - 4) << 1) + 1];
