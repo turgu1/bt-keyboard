@@ -50,10 +50,15 @@ cd ~/esp
 git clone -b release/v4.4 --recursive https://github.com/espressif/esp-idf.git
 ```
 
-... and updated it to the last v4.4 updates from time to time (git pull):
+... and update it to the last v4.4 updates from time to time (git pull):
 
 ```
 cd ~/esp/esp-idf
 git pull
 git submodule --update --init --recursive
 ```
+
+Some work remains to be done:
+
+- Add pairing code retrieval by the application.
+- Some more key mapping
