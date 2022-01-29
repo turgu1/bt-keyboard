@@ -62,3 +62,4 @@ Some work remains to be done:
 
 - Add pairing code retrieval by the application.
 - Some more key mapping
+- CapsLock management
