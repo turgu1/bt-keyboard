@@ -261,11 +261,12 @@ BTKeyboard::add_ble_scan_result(esp_bd_addr_t       bda,
 }
 
 bool 
-BTKeyboard::setup()
+BTKeyboard::setup(pid_handler * handler)
 {
   esp_err_t ret;
   const esp_bt_mode_t mode = HID_HOST_MODE;
 
+  pairing_handler = handler;
   event_queue = xQueueCreate(10, sizeof(KeyInfo));
 
   if (HID_HOST_MODE == HIDH_IDLE_MODE) {
@@ -352,7 +353,7 @@ BTKeyboard::setup()
   ESP_ERROR_CHECK(esp_ble_gattc_register_callback(esp_hidh_gattc_event_handler));
   esp_hidh_config_t config = {
     .callback = hidh_callback,
-    .event_stack_size = 4096, // Required with ESP-IDF 4.4
+    .event_stack_size = 4*1024, // Required with ESP-IDF 4.4
     .callback_arg = nullptr   // idem
   };
   ESP_ERROR_CHECK(esp_hidh_init(&config));
@@ -485,10 +486,11 @@ BTKeyboard::bt_gap_event_handler(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_para
       break;
     }
     case ESP_BT_GAP_KEY_NOTIF_EVT:
-      ESP_LOGI(TAG, "BT GAP KEY_NOTIF passkey:%d", param->key_notif.passkey);
+      ESP_LOGV(TAG, "BT GAP KEY_NOTIF passkey:%d", param->key_notif.passkey);
+      if (bt_keyboard.pairing_handler != nullptr) (*bt_keyboard.pairing_handler)(param->key_notif.passkey);
       break;
     case ESP_BT_GAP_MODE_CHG_EVT:
-      ESP_LOGI(TAG, "BT GAP MODE_CHG_EVT mode:%d", param->mode_chg.mode);
+      ESP_LOGV(TAG, "BT GAP MODE_CHG_EVT mode:%d", param->mode_chg.mode);
       break;
     default:
       ESP_LOGV(TAG, "BT GAP EVENT %s", bt_gap_evt_str(event));
@@ -598,36 +600,36 @@ void BTKeyboard::ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap
         ESP_LOGE(TAG, "BLE GAP AUTH ERROR: 0x%x", param->ble_security.auth_cmpl.fail_reason);
       } 
       else {
-        ESP_LOGD(TAG, "BLE GAP AUTH SUCCESS");
+        ESP_LOGV(TAG, "BLE GAP AUTH SUCCESS");
       }
       break;
 
     case ESP_GAP_BLE_KEY_EVT: //shows the ble key info share with peer device to the user.
-      ESP_LOGD(TAG, "BLE GAP KEY type = %s", ble_key_type_str(param->ble_security.ble_key.key_type));
+      ESP_LOGV(TAG, "BLE GAP KEY type = %s", ble_key_type_str(param->ble_security.ble_key.key_type));
       break;
 
     case ESP_GAP_BLE_PASSKEY_NOTIF_EVT: // ESP_IO_CAP_OUT
       // The app will receive this evt when the IO has Output capability and the peer device IO has Input capability.
       // Show the passkey number to the user to input it in the peer device.
-      ESP_LOGD(TAG, "BLE GAP PASSKEY_NOTIF passkey:%d", param->ble_security.key_notif.passkey);
+      ESP_LOGV(TAG, "BLE GAP PASSKEY_NOTIF passkey:%d", param->ble_security.key_notif.passkey);
       break;
 
     case ESP_GAP_BLE_NC_REQ_EVT: // ESP_IO_CAP_IO
       // The app will receive this event when the IO has DisplayYesNO capability and the peer device IO also has DisplayYesNo capability.
       // show the passkey number to the user to confirm it with the number displayed by peer device.
-      ESP_LOGD(TAG, "BLE GAP NC_REQ passkey:%d", param->ble_security.key_notif.passkey);
+      ESP_LOGV(TAG, "BLE GAP NC_REQ passkey:%d", param->ble_security.key_notif.passkey);
       esp_ble_confirm_reply(param->ble_security.key_notif.bd_addr, true);
       break;
 
     case ESP_GAP_BLE_PASSKEY_REQ_EVT: // ESP_IO_CAP_IN
       // The app will receive this evt when the IO has Input capability and the peer device IO has Output capability.
       // See the passkey number on the peer device and send it back.
-      ESP_LOGD(TAG, "BLE GAP PASSKEY_REQ");
+      ESP_LOGV(TAG, "BLE GAP PASSKEY_REQ");
       //esp_ble_passkey_reply(param->ble_security.ble_req.bd_addr, true, 1234);
       break;
 
     case ESP_GAP_BLE_SEC_REQ_EVT:
-      ESP_LOGD(TAG, "BLE GAP SEC_REQ");
+      ESP_LOGV(TAG, "BLE GAP SEC_REQ");
       // Send the positive(true) security response to the peer device to accept the security request.
       // If not accept the security request, should send the security response with negative(false) accept value.
       esp_ble_gap_security_rsp(param->ble_security.ble_req.bd_addr, true);
@@ -724,12 +726,12 @@ BTKeyboard::devices_scan( int seconds_wait_time)
 {
   size_t results_len = 0;
   esp_hid_scan_result_t *results = NULL;
-  ESP_LOGD(TAG, "SCAN...");
+  ESP_LOGV(TAG, "SCAN...");
 
   //start scan for HID devices
 
   esp_hid_scan(seconds_wait_time, &results_len, &results);
-  ESP_LOGD(TAG, "SCAN: %u results", results_len);
+  ESP_LOGV(TAG, "SCAN: %u results", results_len);
   if (results_len) {
     esp_hid_scan_result_t *r = results;
     esp_hid_scan_result_t *cr = NULL;
@@ -774,14 +776,14 @@ BTKeyboard::hidh_callback(void * handler_args, esp_event_base_t base, int32_t id
     case ESP_HIDH_OPEN_EVENT: 
     // { // Code for ESP-IDF 4.3.1
     //   const uint8_t *bda = esp_hidh_dev_bda_get(param->open.dev);
-    //   ESP_LOGD(TAG, ESP_BD_ADDR_STR " OPEN: %s", ESP_BD_ADDR_HEX(bda), esp_hidh_dev_name_get(param->open.dev));
+    //   ESP_LOGV(TAG, ESP_BD_ADDR_STR " OPEN: %s", ESP_BD_ADDR_HEX(bda), esp_hidh_dev_name_get(param->open.dev));
     //   esp_hidh_dev_dump(param->open.dev, stdout);
     //   break;
     // }
     { // Code for ESP-IDF 4.4
       if (param->open.status == ESP_OK) {
         const uint8_t *bda = esp_hidh_dev_bda_get(param->open.dev);
-        ESP_LOGD(TAG, ESP_BD_ADDR_STR " OPEN: %s", ESP_BD_ADDR_HEX(bda), esp_hidh_dev_name_get(param->open.dev));
+        ESP_LOGV(TAG, ESP_BD_ADDR_STR " OPEN: %s", ESP_BD_ADDR_HEX(bda), esp_hidh_dev_name_get(param->open.dev));
         esp_hidh_dev_dump(param->open.dev, stdout);
       } else {
         ESP_LOGE(TAG, " OPEN failed!");
@@ -790,13 +792,13 @@ BTKeyboard::hidh_callback(void * handler_args, esp_event_base_t base, int32_t id
     }
     case ESP_HIDH_BATTERY_EVENT: {
       const uint8_t *bda = esp_hidh_dev_bda_get(param->battery.dev);
-      ESP_LOGD(TAG, ESP_BD_ADDR_STR " BATTERY: %d%%", ESP_BD_ADDR_HEX(bda), param->battery.level);
+      ESP_LOGV(TAG, ESP_BD_ADDR_STR " BATTERY: %d%%", ESP_BD_ADDR_HEX(bda), param->battery.level);
       bt_keyboard.set_battery_level(param->battery.level);
       break;
     }
     case ESP_HIDH_INPUT_EVENT: {
       const uint8_t *bda = esp_hidh_dev_bda_get(param->input.dev);
-      ESP_LOGD(TAG, ESP_BD_ADDR_STR " INPUT: %8s, MAP: %2u, ID: %3u, Len: %d, Data:", 
+      ESP_LOGV(TAG, ESP_BD_ADDR_STR " INPUT: %8s, MAP: %2u, ID: %3u, Len: %d, Data:", 
                     ESP_BD_ADDR_HEX(bda), 
                     esp_hid_usage_str(param->input.usage), 
                     param->input.map_index, 
@@ -808,7 +810,7 @@ BTKeyboard::hidh_callback(void * handler_args, esp_event_base_t base, int32_t id
     }
     case ESP_HIDH_FEATURE_EVENT:  {
       const uint8_t *bda = esp_hidh_dev_bda_get(param->feature.dev);
-      ESP_LOGD(TAG, ESP_BD_ADDR_STR " FEATURE: %8s, MAP: %2u, ID: %3u, Len: %d", 
+      ESP_LOGV(TAG, ESP_BD_ADDR_STR " FEATURE: %8s, MAP: %2u, ID: %3u, Len: %d", 
                     ESP_BD_ADDR_HEX(bda),
                     esp_hid_usage_str(param->feature.usage), 
                     param->feature.map_index, 
@@ -819,11 +821,11 @@ BTKeyboard::hidh_callback(void * handler_args, esp_event_base_t base, int32_t id
     }
     case ESP_HIDH_CLOSE_EVENT: {
       const uint8_t *bda = esp_hidh_dev_bda_get(param->close.dev);
-      ESP_LOGD(TAG, ESP_BD_ADDR_STR " CLOSE: %s", ESP_BD_ADDR_HEX(bda), esp_hidh_dev_name_get(param->close.dev));
+      ESP_LOGV(TAG, ESP_BD_ADDR_STR " CLOSE: %s", ESP_BD_ADDR_HEX(bda), esp_hidh_dev_name_get(param->close.dev));
       break;
     }
     default:
-      ESP_LOGD(TAG, "EVENT: %d", event);
+      ESP_LOGV(TAG, "EVENT: %d", event);
       break;
   }
 }
@@ -874,13 +876,27 @@ BTKeyboard::wait_for_ascii_char(bool forever)
         }
       }
       else if (ch <= 0x52) {
+        //ESP_LOGI(TAG, "Scan code: %d", ch);
+        if (ch == KEY_CAPS_LOCK) caps_lock = !caps_lock;
         if ((uint8_t) inf.modifier & SHIFT_MASK) {
-          repeat_period = pdMS_TO_TICKS(500);
-          return last_ch = shift_trans_dict[((ch - 4) << 1) + 1];
+          if (caps_lock) {
+            repeat_period = pdMS_TO_TICKS(500);
+            return last_ch = shift_trans_dict[(ch - 4) << 1];
+          }
+          else {
+            repeat_period = pdMS_TO_TICKS(500);
+            return last_ch = shift_trans_dict[((ch - 4) << 1) + 1];
+          }
         }
         else {
-          repeat_period = pdMS_TO_TICKS(500);
-          return last_ch = shift_trans_dict[(ch - 4) << 1];
+          if (caps_lock) {
+            repeat_period = pdMS_TO_TICKS(500);
+            return last_ch = shift_trans_dict[((ch - 4) << 1) + 1];
+          }
+          else {
+            repeat_period = pdMS_TO_TICKS(500);
+            return last_ch = shift_trans_dict[(ch - 4) << 1];
+          }
         }
       }
     }

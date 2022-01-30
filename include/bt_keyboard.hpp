@@ -22,6 +22,10 @@
 class BTKeyboard
 {
   public:
+    typedef void pid_handler(uint32_t code);
+
+    const uint8_t KEY_CAPS_LOCK = 0x39;
+
     enum class KeyModifier : uint8_t { 
       L_CTRL = 0x01, L_SHIFT = 0x02, L_ALT = 0x04, L_META = 0x08, 
       R_CTRL = 0x10, R_SHIFT = 0x20, R_ALT = 0x40, R_META = 0x80 };
@@ -133,11 +137,13 @@ class BTKeyboard
 
     void push_key(uint8_t * keys, uint8_t size);
 
-    xQueueHandle event_queue;
-    int8_t       battery_level;
-    bool         key_avail[MAX_KEY_COUNT];
-    char         last_ch;
-    TickType_t   repeat_period;
+    xQueueHandle  event_queue;
+    int8_t        battery_level;
+    bool          key_avail[MAX_KEY_COUNT];
+    char          last_ch;
+    TickType_t    repeat_period;
+    pid_handler * pairing_handler;
+    bool          caps_lock;
 
   public:
 
@@ -145,11 +151,13 @@ class BTKeyboard
       bt_scan_results(nullptr),
       ble_scan_results(nullptr), 
       num_bt_scan_results(0), 
-      num_ble_scan_results(0) 
+      num_ble_scan_results(0),
+      pairing_handler(nullptr),
+      caps_lock(false)
     {
     }
 
-    bool setup();
+    bool setup(pid_handler * handler = nullptr);
     void devices_scan(int seconds_wait_time = 5);
 
     inline uint8_t get_battery_level() { return battery_level; }

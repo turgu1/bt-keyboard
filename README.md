@@ -60,6 +60,11 @@ git submodule --update --init --recursive
 
 Some work remains to be done:
 
-- Add pairing code retrieval by the application.
-- Some more key mapping
-- CapsLock management
+- [x] Add pairing code retrieval by the application.
+- [x] CapsLock management
+- [ ] Some more key mapping
+- [ ] Isolate the class into a ESP-IDF Component
+
+Issue(s)
+
+- Typing way too fast (beyond normal keyboard usage) may cause a double panic reset. Still investigating...
