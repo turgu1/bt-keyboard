@@ -630,6 +630,7 @@ void BTKeyboard::ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap
       // The app will receive this evt when the IO has Output capability and the peer device IO has Input capability.
       // Show the passkey number to the user to input it in the peer device.
       ESP_LOGV(TAG, "BLE GAP PASSKEY_NOTIF passkey:%d", param->ble_security.key_notif.passkey);
+      if (bt_keyboard.pairing_handler != nullptr) (*bt_keyboard.pairing_handler)(param->ble_security.key_notif.passkey);
       break;
 
     case ESP_GAP_BLE_NC_REQ_EVT: // ESP_IO_CAP_IO
