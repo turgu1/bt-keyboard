@@ -187,9 +187,3 @@ class BTKeyboard
     char wait_for_ascii_char(bool forever = true);
     inline char get_ascii_char() { return wait_for_ascii_char(false); }
 };
-
-#if __BT_KEYBOARD__
-  BTKeyboard bt_keyboard;
-#else
-  extern BTKeyboard bt_keyboard;
-#endif

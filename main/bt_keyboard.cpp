@@ -56,6 +56,8 @@ const char BTKeyboard::shift_trans_dict[] =
   "\220\220\221\221\222\222\177\177"                    // Insert Home PageUp Delete
   "\223\223\224\224\225\225\226\226\227\227\230\230";   // End PageDown Right Left Dow Up
 
+static BTKeyboard * bt_keyboard = nullptr;
+
 const char * 
 BTKeyboard::ble_addr_type_str(esp_ble_addr_type_t ble_addr_type)
 {
@@ -284,6 +286,13 @@ BTKeyboard::setup(pid_handler * handler)
   esp_err_t ret;
   const esp_bt_mode_t mode = HID_HOST_MODE;
 
+  if (bt_keyboard != nullptr) {
+    ESP_LOGE(TAG, "Setup called more than once. Only one instance of BTKeyboard is allowed.");
+    return false;
+  }
+
+  bt_keyboard = this;
+
   pairing_handler = handler;
   event_queue = xQueueCreate(10, sizeof(KeyInfo));
 
@@ -500,12 +509,12 @@ BTKeyboard::bt_gap_event_handler(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_para
       break;
     }
     case ESP_BT_GAP_DISC_RES_EVT: {
-      bt_keyboard.handle_bt_device_result(param);
+      bt_keyboard->handle_bt_device_result(param);
       break;
     }
     case ESP_BT_GAP_KEY_NOTIF_EVT:
       ESP_LOGV(TAG, "BT GAP KEY_NOTIF passkey:%d", param->key_notif.passkey);
-      if (bt_keyboard.pairing_handler != nullptr) (*bt_keyboard.pairing_handler)(param->key_notif.passkey);
+      if (bt_keyboard->pairing_handler != nullptr) (*bt_keyboard->pairing_handler)(param->key_notif.passkey);
       break;
     case ESP_BT_GAP_MODE_CHG_EVT:
       ESP_LOGV(TAG, "BT GAP MODE_CHG_EVT mode:%d", param->mode_chg.mode);
@@ -584,7 +593,7 @@ void BTKeyboard::ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap
     case ESP_GAP_BLE_SCAN_RESULT_EVT: {
       switch (param->scan_rst.search_evt) {
         case ESP_GAP_SEARCH_INQ_RES_EVT: {
-          bt_keyboard.handle_ble_device_result(param);
+          bt_keyboard->handle_ble_device_result(param);
           break;
         }
         case ESP_GAP_SEARCH_INQ_CMPL_EVT:
@@ -630,7 +639,7 @@ void BTKeyboard::ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap
       // The app will receive this evt when the IO has Output capability and the peer device IO has Input capability.
       // Show the passkey number to the user to input it in the peer device.
       ESP_LOGV(TAG, "BLE GAP PASSKEY_NOTIF passkey:%d", param->ble_security.key_notif.passkey);
-      if (bt_keyboard.pairing_handler != nullptr) (*bt_keyboard.pairing_handler)(param->ble_security.key_notif.passkey);
+      if (bt_keyboard->pairing_handler != nullptr) (*bt_keyboard->pairing_handler)(param->ble_security.key_notif.passkey);
       break;
 
     case ESP_GAP_BLE_NC_REQ_EVT: // ESP_IO_CAP_IO
@@ -812,7 +821,7 @@ BTKeyboard::hidh_callback(void * handler_args, esp_event_base_t base, int32_t id
     case ESP_HIDH_BATTERY_EVENT: {
       const uint8_t *bda = esp_hidh_dev_bda_get(param->battery.dev);
       ESP_LOGV(TAG, ESP_BD_ADDR_STR " BATTERY: %d%%", ESP_BD_ADDR_HEX(bda), param->battery.level);
-      bt_keyboard.set_battery_level(param->battery.level);
+      bt_keyboard->set_battery_level(param->battery.level);
       break;
     }
     case ESP_HIDH_INPUT_EVENT: {
@@ -824,7 +833,7 @@ BTKeyboard::hidh_callback(void * handler_args, esp_event_base_t base, int32_t id
                     param->input.report_id, 
                     param->input.length);
       ESP_LOG_BUFFER_HEX_LEVEL(TAG, param->input.data, param->input.length, ESP_LOG_DEBUG);
-      bt_keyboard.push_key(param->input.data, param->input.length);
+      bt_keyboard->push_key(param->input.data, param->input.length);
       break;
     }
     case ESP_HIDH_FEATURE_EVENT:  {

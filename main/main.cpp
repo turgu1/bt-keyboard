@@ -9,16 +9,19 @@
 
 #include <iostream>
 
-extern "C" {
+BTKeyboard bt_keyboard;
+    
+void pairing_handler(uint32_t pid)
+{
+  std::cout << "Please enter the following pairing code, "
+            << std::endl
+            << "followed with ENTER on your keyboard: "
+            << pid
+            << std::endl;           
+}
 
-  void pairing_handler(uint32_t pid)
-  {
-    std::cout << "Please enter the following pairing code, "
-              << std::endl
-              << "followed with ENTER on your keyboard: "
-              << pid
-              << std::endl;           
-  }
+
+extern "C" {
 
   void app_main() 
   {
