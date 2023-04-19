@@ -321,13 +321,8 @@ BTKeyboard::setup(pid_handler * handler)
   bt_cfg.bt_max_acl_conn  = 3;
   bt_cfg.bt_max_sync_conn = 3;
 
-  if ((ret = esp_bt_controller_init(&bt_cfg))) {
+  if (!btStart()) { //using btStart works in Arduino
     ESP_LOGE(TAG, "esp_bt_controller_init failed: %d", ret);
-    return false;
-  }
-
-  if ((ret = esp_bt_controller_enable(mode))) {
-    ESP_LOGE(TAG, "esp_bt_controller_enable failed: %d", ret);
     return false;
   }
 
