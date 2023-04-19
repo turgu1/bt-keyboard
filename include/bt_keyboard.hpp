@@ -36,6 +36,7 @@
 #include "esp_hid_common.h"
 #include "esp_gap_bt_api.h"
 #include "esp_gap_ble_api.h"
+#include "esp32-hal-bt.h"
 
 class BTKeyboard
 {
