@@ -25,17 +25,22 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
+#include "freertos/event_groups.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_event.h"
 #include "esp_bt.h"
 #include "esp_bt_defs.h"
+#include "esp_bt_device.h"
 #include "esp_bt_main.h"
 #include "esp_hidh.h"
 #include "esp_hid_common.h"
 #include "esp_gap_bt_api.h"
 #include "esp_gap_ble_api.h"
+#include "esp_gatts_api.h"
+#include "esp_gatt_defs.h"
+#include "esp_wifi.h"
 #include "esp32-hal-bt.h"
 
 class BTKeyboard
@@ -106,6 +111,7 @@ class BTKeyboard
 
     esp_hid_scan_result_t * bt_scan_results;
     esp_hid_scan_result_t * ble_scan_results;
+    esp_hid_scan_result_t lastConnected;
     size_t                  num_bt_scan_results;
     size_t                  num_ble_scan_results;
 
@@ -177,7 +183,7 @@ class BTKeyboard
     }
 
     bool setup(pid_handler * handler = nullptr);
-    void devices_scan(int seconds_wait_time = 5);
+    bool devices_scan(int seconds_wait_time = 5);
 
     inline uint8_t get_battery_level() { return battery_level; }
     
@@ -187,4 +193,8 @@ class BTKeyboard
 
     char wait_for_ascii_char(bool forever = true);
     inline char get_ascii_char() { return wait_for_ascii_char(false); }
+
+    void quick_reconnect(void);
+
+    static bool isConnected; // hidh callback event CLOSE turns this false when kb disconnects
 };
