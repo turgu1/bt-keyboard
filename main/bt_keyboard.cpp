@@ -57,6 +57,7 @@ const char BTKeyboard::shift_trans_dict[] =
   "\223\223\224\224\225\225\226\226\227\227\230\230";   // End PageDown Right Left Dow Up
 
 static BTKeyboard * bt_keyboard = nullptr;
+bool BTKeyboard::isConnected = false;
 
 const char * 
 BTKeyboard::ble_addr_type_str(esp_ble_addr_type_t ble_addr_type)
@@ -380,6 +381,23 @@ BTKeyboard::setup(pid_handler * handler)
   };
   ESP_ERROR_CHECK(esp_hidh_init(&config));
 
+  /* set the security iocap & auth_req & key size & init key response key parameters to the stack*/
+  esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_MITM_BOND;     //bonding with peer device after authentication
+  uint8_t key_size = 16;      //the key size should be 7~16 bytes
+  uint8_t init_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
+  uint8_t rsp_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
+  uint8_t oob_support = ESP_BLE_OOB_DISABLE;
+  esp_ble_gap_set_security_param(ESP_BLE_SM_AUTHEN_REQ_MODE, &auth_req, sizeof(uint8_t));
+  esp_ble_gap_set_security_param(ESP_BLE_SM_IOCAP_MODE, &iocap, sizeof(uint8_t));
+  esp_ble_gap_set_security_param(ESP_BLE_SM_MAX_KEY_SIZE, &key_size, sizeof(uint8_t));
+  esp_ble_gap_set_security_param(ESP_BLE_SM_OOB_SUPPORT, &oob_support, sizeof(uint8_t));
+  /* If your BLE device act as a Slave, the init_key means you hope which types of key of the master should distribute to you,
+  and the response key means which key you can distribute to the Master;
+  If your BLE device act as a master, the response key means you hope which types of key of the slave should distribute to you,
+  and the init key means which key you can distribute to the slave. */
+  esp_ble_gap_set_security_param(ESP_BLE_SM_SET_INIT_KEY, &init_key, sizeof(uint8_t));
+  esp_ble_gap_set_security_param(ESP_BLE_SM_SET_RSP_KEY, &rsp_key, sizeof(uint8_t));
+
   for (int i = 0; i < MAX_KEY_COUNT; i++) {
     key_avail[i] = true;
   }
@@ -564,14 +582,35 @@ BTKeyboard::handle_ble_device_result(esp_ble_gap_cb_param_t * param)
   }
   GAP_DBG_PRINTF("\n");
 
+  int numBonded = esp_ble_get_bond_device_num();
+  esp_ble_bond_dev_t* dev_list = (esp_ble_bond_dev_t*)malloc(sizeof(esp_ble_bond_dev_t) * numBonded); //bonded device information list
+
+  if ((esp_ble_get_bond_device_list(&numBonded, dev_list)) != ESP_OK) { //populate list
+      ESP_LOGE(TAG, "esp_ble_get_bond_device_list failed");
+  }
+
   #if SCAN
-    if (uuid == ESP_GATT_UUID_HID_SVC) {
+
+  bool isLastBonded = false;
+  for (int i = 0; i < ESP_BD_ADDR_LEN; i++) {
+      if (param->scan_rst.bda[i] == dev_list[0].bd_addr[i])
+          isLastBonded = true;
+      else {
+          isLastBonded = false;
+          break;
+      }
+  }
+
+  if (uuid == ESP_GATT_UUID_HID_SVC || isLastBonded == true) {
       add_ble_scan_result(param->scan_rst.bda, 
                           param->scan_rst.ble_addr_type, 
                           appearance, adv_name, adv_name_len, 
                           param->scan_rst.rssi);
-    }
+  }
+
   #endif
+
+  free(dev_list);
 }
 
 void BTKeyboard::ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t * param)
@@ -744,17 +783,68 @@ BTKeyboard::esp_hid_scan(uint32_t seconds, size_t *num_results, esp_hid_scan_res
   return ESP_OK;
 }
 
-void 
+bool 
 BTKeyboard::devices_scan( int seconds_wait_time)
 {
+    if (isConnected)
+        return true;
   size_t results_len = 0;
   esp_hid_scan_result_t *results = NULL;
+
   ESP_LOGV(TAG, "SCAN...");
+
+  int numBonded = esp_ble_get_bond_device_num();
+  ESP_LOGV(TAG, "Number of bonded devices: %d", numBonded);
+
+  esp_ble_bond_dev_t* dev_list = (esp_ble_bond_dev_t*)malloc(sizeof(esp_ble_bond_dev_t) * numBonded); //bonded device information list
+
+  if ((esp_ble_get_bond_device_list(&numBonded, dev_list)) != ESP_OK) { //populate list
+      ESP_LOGE(TAG, "esp_ble_get_bond_device_list failed");
+  }
+
+  ESP_LOGI(TAG, "Last bonded device: " ESP_BD_ADDR_STR, ESP_BD_ADDR_HEX(dev_list[0].bd_addr)); //last one is number 0 (as of ESP v5.0.1)
 
   //start scan for HID devices
 
   esp_hid_scan(seconds_wait_time, &results_len, &results);
   ESP_LOGV(TAG, "SCAN: %u results", results_len);
+
+  //check if last bonded device is present
+
+  if (results_len) {
+      ESP_LOGV(TAG, "Checking if bonded started...");
+      esp_hid_scan_result_t* r = results;
+      esp_hid_scan_result_t* cr = NULL;
+      bool isLastBonded = false;
+      while (r) {
+          for (int i = 0; i < ESP_BD_ADDR_LEN; i++) {
+              if (r->bda[i] == dev_list[0].bd_addr[i])
+                  isLastBonded = true;
+              else {
+                  isLastBonded = false;
+                  break;
+              }
+          }
+
+          if (isLastBonded) {
+              ESP_LOGI(TAG, "Last bonded device present, connecting to it...");
+              cr = r;
+              break;
+          }
+
+          r = r->next;
+      }
+
+      if (cr) {
+          lastConnected = *cr; //store device for quick-connecting later
+          if ((esp_hidh_dev_open(cr->bda, cr->transport, cr->ble.addr_type)) == ESP_OK) {
+              esp_hid_scan_results_free(results);
+              free(dev_list);
+              return true; //WARNING: devices_scan retourning true doesn't mean device connected!! check isConnected for that
+          }
+      }
+  }
+
   if (results_len) {
     esp_hid_scan_result_t *r = results;
     esp_hid_scan_result_t *cr = NULL;
@@ -781,10 +871,18 @@ BTKeyboard::devices_scan( int seconds_wait_time)
     }
     if (cr) {
       //open the last result
-      esp_hidh_dev_open(cr->bda, cr->transport, cr->ble.addr_type);
+        lastConnected = *cr; //store device for quick-connecting later
+        if ((esp_hidh_dev_open(cr->bda, cr->transport, cr->ble.addr_type)) == ESP_OK) {
+            esp_hid_scan_results_free(results);
+            free(dev_list);
+            return true; //WARNING: devices_scan retourning true doesn't mean device connected!! check isConnected for that
+        }
     }
     //free the results
     esp_hid_scan_results_free(results);
+    free(dev_list);
+
+    return false;
   }
 }
 
@@ -808,8 +906,10 @@ BTKeyboard::hidh_callback(void * handler_args, esp_event_base_t base, int32_t id
         const uint8_t *bda = esp_hidh_dev_bda_get(param->open.dev);
         ESP_LOGV(TAG, ESP_BD_ADDR_STR " OPEN: %s", ESP_BD_ADDR_HEX(bda), esp_hidh_dev_name_get(param->open.dev));
         esp_hidh_dev_dump(param->open.dev, stdout);
+        isConnected = true;
       } else {
         ESP_LOGE(TAG, " OPEN failed!");
+        isConnected = false;
       }
       break;
     }
@@ -845,6 +945,7 @@ BTKeyboard::hidh_callback(void * handler_args, esp_event_base_t base, int32_t id
     case ESP_HIDH_CLOSE_EVENT: {
       const uint8_t *bda = esp_hidh_dev_bda_get(param->close.dev);
       ESP_LOGV(TAG, ESP_BD_ADDR_STR " CLOSE: %s", ESP_BD_ADDR_HEX(bda), esp_hidh_dev_name_get(param->close.dev));
+      isConnected = false;
       break;
     }
     default:
@@ -926,4 +1027,15 @@ BTKeyboard::wait_for_ascii_char(bool forever)
 
     last_ch = 0; 
   }
+}
+
+void
+BTKeyboard::quick_reconnect(void) //tries to connect to the latest bonded device, without a scan
+{
+    while (!BTKeyboard::isConnected) {
+        ESP_LOGV(TAG, "Trying to reconnect...");
+        ESP_LOGV(TAG, "To: " ESP_BD_ADDR_STR, ESP_BD_ADDR_HEX(lastConnected.bda));
+        esp_hidh_dev_open(lastConnected.bda, lastConnected.transport, lastConnected.ble.addr_type);
+        ESP_LOGV(TAG, "Tried to reconnect.");
+    }
 }
