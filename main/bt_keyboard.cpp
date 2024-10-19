@@ -361,7 +361,7 @@ BTKeyboard::setup(pid_handler * handler)
   pin_code[5] = '6';
   pin_code[6] = '7';
   pin_code[7] = '8';
-  pin_code[8] = NULL;
+  pin_code[8] = 0;
   esp_bt_gap_set_pin(pin_type, 8, pin_code);
 
   if ((ret = esp_bt_gap_register_callback(bt_gap_event_handler))) {
@@ -390,7 +390,7 @@ BTKeyboard::setup(pid_handler * handler)
   };
   ESP_ERROR_CHECK(esp_hidh_init(&config));
 
-  for (int i = 0; i < MAX_KEY_COUNT; i++) {
+  for (int i = 0; i < MAX_KEY_DATA_SIZE; i++) {
     key_avail[i] = true;
   }
 
@@ -867,21 +867,25 @@ void
 BTKeyboard::push_key(uint8_t * keys, uint8_t size)
 {
   KeyInfo inf;
-  inf.modifier = (KeyModifier) keys[0];
-  
-  uint8_t max = (size > MAX_KEY_COUNT + 2) ? MAX_KEY_COUNT : size - 2;
-  inf.keys[0] = inf.keys[1] = inf.keys[2] = 0;
-  for (int i = 0; i < max; i++) {
-    inf.keys[i] = keys[i + 2];
+  if (size>MAX_KEY_DATA_SIZE) {
+    ESP_LOGW(TAG, "Keyboard event data size bigger than expected: %d\n.", size);
+    size = MAX_KEY_DATA_SIZE;
   }
 
-  xQueueSend(event_queue, &inf, 0);
+  // enqueue 
+  inf.size = size;
+  memcpy(&inf.keys, keys, size);
+
+  xQueueSendToBack(event_queue, &inf, 0);
 }
 
+#if 0
 char
 BTKeyboard::wait_for_ascii_char(bool forever)
 {
   KeyInfo inf;
+
+  ESP_LOGV(TAG, "wait_for_ascii_char");
 
   while (true) {
     if (!wait_for_low_event(inf, (last_ch == 0) ? (forever ? portMAX_DELAY : 0) : repeat_period)) {
@@ -890,7 +894,7 @@ BTKeyboard::wait_for_ascii_char(bool forever)
     }
 
     int k = -1;
-    for (int i = 0; i < MAX_KEY_COUNT; i++) {
+    for (int i = 0; i < MAX_KEY_DATA_SIZE; i++) {
       if ((k < 0) && key_avail[i]) k = i;
       key_avail[i] = inf.keys[i] == 0; 
     }
@@ -937,3 +941,4 @@ BTKeyboard::wait_for_ascii_char(bool forever)
     last_ch = 0; 
   }
 }
+#endif

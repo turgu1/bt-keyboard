@@ -55,14 +55,11 @@ extern "C" {
           
           bt_keyboard.wait_for_low_event(inf);
 
-          std::cout << "RECEIVED KEYBOARD EVENT: "
-                    << std::hex
-                    << "Mod: "
-                    << + (uint8_t) inf.modifier
-                    << ", Keys: "
-                    << +inf.keys[0] << ", "
-                    << +inf.keys[1] << ", "
-                    << +inf.keys[2] << std::endl;
+          std::cout << "RECEIVED KEYBOARD EVENT: ";
+          for (int n=0; n<inf.size; n++) {
+            std::cout << std::hex << +inf.keys[n] << ", ";
+          }
+          std::cout << std::endl;
         #endif
 
       }
