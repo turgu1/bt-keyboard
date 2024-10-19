@@ -885,8 +885,6 @@ BTKeyboard::wait_for_ascii_char(bool forever)
 {
   KeyInfo inf;
 
-  ESP_LOGV(TAG, "wait_for_ascii_char");
-
   while (true) {
     if (!wait_for_low_event(inf, (last_ch == 0) ? (forever ? portMAX_DELAY : 0) : repeat_period)) {
       repeat_period = pdMS_TO_TICKS(120);
