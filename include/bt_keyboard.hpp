@@ -53,10 +53,10 @@ class BTKeyboard
     const uint8_t   ALT_MASK = ((uint8_t) KeyModifier::L_ALT  ) | ((uint8_t) KeyModifier::R_ALT  );
     const uint8_t  META_MASK = ((uint8_t) KeyModifier::L_META ) | ((uint8_t) KeyModifier::R_META );
 
-    static const uint8_t MAX_KEY_COUNT = 3;
+    static const uint8_t MAX_KEY_DATA_SIZE = 16;
     struct KeyInfo {
-      KeyModifier modifier;
-      uint8_t     keys[MAX_KEY_COUNT];
+      uint8_t    size;
+      uint8_t     keys[MAX_KEY_DATA_SIZE];
     };
 
   private:
@@ -79,8 +79,8 @@ class BTKeyboard
       static const esp_bt_mode_t HID_HOST_MODE = HIDH_IDLE_MODE;
     #endif
 
-    static xSemaphoreHandle bt_hidh_cb_semaphore;
-    static xSemaphoreHandle ble_hidh_cb_semaphore;
+    static SemaphoreHandle_t bt_hidh_cb_semaphore;
+    static SemaphoreHandle_t ble_hidh_cb_semaphore;
 
     struct esp_hid_scan_result_t {
       struct esp_hid_scan_result_t * next;
@@ -155,9 +155,9 @@ class BTKeyboard
 
     void push_key(uint8_t * keys, uint8_t size);
 
-    xQueueHandle  event_queue;
+    QueueHandle_t event_queue;
     int8_t        battery_level;
-    bool          key_avail[MAX_KEY_COUNT];
+    bool          key_avail[MAX_KEY_DATA_SIZE];
     char          last_ch;
     TickType_t    repeat_period;
     pid_handler * pairing_handler;

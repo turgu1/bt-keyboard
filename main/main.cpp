@@ -42,7 +42,7 @@ extern "C" {
       bt_keyboard.devices_scan();              // Required to discover new keyboards and for pairing
                                                // Default duration is 5 seconds
       while (true) {
-        #if 1                                  // 0 = scan codes retrieval, 1 = augmented ASCII retrieval
+        #if 0                                  // 0 = scan codes retrieval, 1 = augmented ASCII retrieval
           uint8_t ch = bt_keyboard.wait_for_ascii_char();
           // uint8_t ch = bt_keyboard.get_ascii_char(); // Without waiting
 
@@ -55,14 +55,11 @@ extern "C" {
           
           bt_keyboard.wait_for_low_event(inf);
 
-          std::cout << "RECEIVED KEYBOARD EVENT: "
-                    << std::hex
-                    << "Mod: "
-                    << + (uint8_t) inf.modifier
-                    << ", Keys: "
-                    << +inf.keys[0] << ", "
-                    << +inf.keys[1] << ", "
-                    << +inf.keys[2] << std::endl;
+          std::cout << "RECEIVED KEYBOARD EVENT: ";
+          for (int n=0; n<inf.size; n++) {
+            std::cout << std::hex << +inf.keys[n] << ", ";
+          }
+          std::cout << std::endl;
         #endif
 
       }

@@ -38,8 +38,8 @@
 #define WAIT_BLE_CB() xSemaphoreTake(ble_hidh_cb_semaphore, portMAX_DELAY)
 #define SEND_BLE_CB() xSemaphoreGive(ble_hidh_cb_semaphore)
 
-xSemaphoreHandle BTKeyboard::bt_hidh_cb_semaphore = nullptr;
-xSemaphoreHandle BTKeyboard::ble_hidh_cb_semaphore = nullptr;
+SemaphoreHandle_t BTKeyboard::bt_hidh_cb_semaphore = nullptr;
+SemaphoreHandle_t BTKeyboard::ble_hidh_cb_semaphore = nullptr;
 
 const char * BTKeyboard::gap_bt_prop_type_names[] = { "", "BDNAME", "COD", "RSSI", "EIR" };
 const char *      BTKeyboard::ble_gap_evt_names[] = { "ADV_DATA_SET_COMPLETE", "SCAN_RSP_DATA_SET_COMPLETE", "SCAN_PARAM_SET_COMPLETE", "SCAN_RESULT", "ADV_DATA_RAW_SET_COMPLETE", "SCAN_RSP_DATA_RAW_SET_COMPLETE", "ADV_START_COMPLETE", "SCAN_START_COMPLETE", "AUTH_CMPL", "KEY", "SEC_REQ", "PASSKEY_NOTIF", "PASSKEY_REQ", "OOB_REQ", "LOCAL_IR", "LOCAL_ER", "NC_REQ", "ADV_STOP_COMPLETE", "SCAN_STOP_COMPLETE", "SET_STATIC_RAND_ADDR", "UPDATE_CONN_PARAMS", "SET_PKT_LENGTH_COMPLETE", "SET_LOCAL_PRIVACY_COMPLETE", "REMOVE_BOND_DEV_COMPLETE", "CLEAR_BOND_DEV_COMPLETE", "GET_BOND_DEV_COMPLETE", "READ_RSSI_COMPLETE", "UPDATE_WHITELIST_COMPLETE" };
@@ -131,7 +131,7 @@ BTKeyboard::print_uuid(esp_bt_uuid_t * uuid)
   if (uuid->len == ESP_UUID_LEN_16) {
     GAP_DBG_PRINTF("UUID16: 0x%04x", uuid->uuid.uuid16);
   } else if (uuid->len == ESP_UUID_LEN_32) {
-    GAP_DBG_PRINTF("UUID32: 0x%08x", uuid->uuid.uuid32);
+    GAP_DBG_PRINTF("UUID32: 0x%08lx", uuid->uuid.uuid32);
   } else if (uuid->len == ESP_UUID_LEN_128) {
     GAP_DBG_PRINTF("UUID128: %02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x",
                     uuid->uuid.uuid128[ 0],
@@ -357,7 +357,12 @@ BTKeyboard::setup(pid_handler * handler)
   pin_code[1] = '2';
   pin_code[2] = '3';
   pin_code[3] = '4';
-  esp_bt_gap_set_pin(pin_type, 4, pin_code);
+  pin_code[4] = '5';
+  pin_code[5] = '6';
+  pin_code[6] = '7';
+  pin_code[7] = '8';
+  pin_code[8] = 0;
+  esp_bt_gap_set_pin(pin_type, 8, pin_code);
 
   if ((ret = esp_bt_gap_register_callback(bt_gap_event_handler))) {
     ESP_LOGE(TAG, "esp_bt_gap_register_callback failed: %d", ret);
@@ -385,7 +390,7 @@ BTKeyboard::setup(pid_handler * handler)
   };
   ESP_ERROR_CHECK(esp_hidh_init(&config));
 
-  for (int i = 0; i < MAX_KEY_COUNT; i++) {
+  for (int i = 0; i < MAX_KEY_DATA_SIZE; i++) {
     key_avail[i] = true;
   }
 
@@ -513,7 +518,7 @@ BTKeyboard::bt_gap_event_handler(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_para
       break;
     }
     case ESP_BT_GAP_KEY_NOTIF_EVT:
-      ESP_LOGV(TAG, "BT GAP KEY_NOTIF passkey:%d", param->key_notif.passkey);
+      ESP_LOGV(TAG, "BT GAP KEY_NOTIF passkey:%ld", param->key_notif.passkey);
       if (bt_keyboard->pairing_handler != nullptr) (*bt_keyboard->pairing_handler)(param->key_notif.passkey);
       break;
     case ESP_BT_GAP_MODE_CHG_EVT:
@@ -638,14 +643,14 @@ void BTKeyboard::ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap
     case ESP_GAP_BLE_PASSKEY_NOTIF_EVT: // ESP_IO_CAP_OUT
       // The app will receive this evt when the IO has Output capability and the peer device IO has Input capability.
       // Show the passkey number to the user to input it in the peer device.
-      ESP_LOGV(TAG, "BLE GAP PASSKEY_NOTIF passkey:%d", param->ble_security.key_notif.passkey);
+      ESP_LOGV(TAG, "BLE GAP PASSKEY_NOTIF passkey:%ld", param->ble_security.key_notif.passkey);
       if (bt_keyboard->pairing_handler != nullptr) (*bt_keyboard->pairing_handler)(param->ble_security.key_notif.passkey);
       break;
 
     case ESP_GAP_BLE_NC_REQ_EVT: // ESP_IO_CAP_IO
       // The app will receive this event when the IO has DisplayYesNO capability and the peer device IO also has DisplayYesNo capability.
       // show the passkey number to the user to confirm it with the number displayed by peer device.
-      ESP_LOGV(TAG, "BLE GAP NC_REQ passkey:%d", param->ble_security.key_notif.passkey);
+      ESP_LOGV(TAG, "BLE GAP NC_REQ passkey:%ld", param->ble_security.key_notif.passkey);
       esp_ble_confirm_reply(param->ble_security.key_notif.bd_addr, true);
       break;
 
@@ -862,17 +867,19 @@ void
 BTKeyboard::push_key(uint8_t * keys, uint8_t size)
 {
   KeyInfo inf;
-  inf.modifier = (KeyModifier) keys[0];
-  
-  uint8_t max = (size > MAX_KEY_COUNT + 2) ? MAX_KEY_COUNT : size - 2;
-  inf.keys[0] = inf.keys[1] = inf.keys[2] = 0;
-  for (int i = 0; i < max; i++) {
-    inf.keys[i] = keys[i + 2];
+  if (size>MAX_KEY_DATA_SIZE) {
+    ESP_LOGW(TAG, "Keyboard event data size bigger than expected: %d\n.", size);
+    size = MAX_KEY_DATA_SIZE;
   }
 
-  xQueueSend(event_queue, &inf, 0);
+  // enqueue 
+  inf.size = size;
+  memcpy(&inf.keys, keys, size);
+
+  xQueueSendToBack(event_queue, &inf, 0);
 }
 
+#if 0
 char
 BTKeyboard::wait_for_ascii_char(bool forever)
 {
@@ -885,7 +892,7 @@ BTKeyboard::wait_for_ascii_char(bool forever)
     }
 
     int k = -1;
-    for (int i = 0; i < MAX_KEY_COUNT; i++) {
+    for (int i = 0; i < MAX_KEY_DATA_SIZE; i++) {
       if ((k < 0) && key_avail[i]) k = i;
       key_avail[i] = inf.keys[i] == 0; 
     }
@@ -932,3 +939,4 @@ BTKeyboard::wait_for_ascii_char(bool forever)
     last_ch = 0; 
   }
 }
+#endif
