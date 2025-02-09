@@ -1,0 +1,41 @@
+{
+    "version": 10,
+    "configurePresets": [
+        {
+            "name": "bt_keyboard",
+            "displayName": "BTKeyboard",
+            "description": "Build for BTKeyboard",
+            "binaryDir": "${sourceDir}/build",
+            "inherits": [
+                "esp-idf"
+            ]
+        },
+        {
+            "name": "esp-idf",
+            "binaryDir": "${sourceDir}/build",
+            "displayName": "ESP-IDF Build",
+            "description": "Build for ESP32 using ESP-IDF",
+            "generator": "Ninja",
+            "hidden": true,
+            "environment": {
+                "IDF_TARGET": "esp32"
+            },
+            "cacheVariables": {
+                "CMAKE_TOOLCHAIN_FILE": "$env{IDF_PATH}/tools/cmake/toolchain-esp32.cmake",
+                "CMAKE_CXX_STANDARD": "17",
+                "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_BUILD_TYPE": "Debug",
+                "BUILD_TYPE": "INKPLATE_BUILD"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "bt_keyboard",
+            "description": "BTKeyboard",
+            "displayName": "BTKeyboard",
+            "configurePreset": "bt_keyboard"
+        }
+    ]
+}
