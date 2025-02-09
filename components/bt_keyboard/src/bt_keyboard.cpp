@@ -11,7 +11,7 @@
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
@@ -92,10 +92,12 @@ static std::ostream &operator<<(std::ostream &os, const esp_bd_addr_t &addr) {
   char oldFill                     = os.fill('0');
   char oldWidth                    = os.width();
 
-  os << "(mac) " << std::hex << std::setw(2) << +addr[0];
+  os << std::hex << std::setw(2) << +addr[0];
   for (uint i = 1; i < 6; ++i) {
     os << ':' << std::hex << std::setw(2) << +addr[i];
   }
+
+  os << std::dec;
 
   os.fill(oldFill);
   os.flags(oldFlags);
@@ -120,6 +122,8 @@ static std::ostream &operator<<(std::ostream &os, const esp_bt_uuid_t &uuid) {
       os << "," << std::setw(2) << std::hex << +uuid.uuid.uuid128[i];
     }
   }
+
+  os << std::dec;
 
   os.fill(oldFill);
   os.flags(oldFlags);
@@ -795,24 +799,24 @@ void BTKeyboard::devices_scan(int seconds_wait_time) {
     esp_hid_scan_result_t *r  = results;
     esp_hid_scan_result_t *cr = NULL;
     while (r) {
-      std::cout << "  " << (r->transport == ESP_HID_TRANSPORT_BLE ? "BLE" : "BT ") << ": " << r->bda
-                << ", RSSI: " << std::dec << r->rssi
-                << ", "; // << ", USAGE: " << esp_hid_usage_str(r->usage);
+      std::cout << "  " << (r->transport == ESP_HID_TRANSPORT_BLE ? "BLE: " : "BT: ") << r->bda
+                << ", RSSI: " << r->rssi << ", USAGE: " << esp_hid_usage_str(r->usage);
       if (r->transport == ESP_HID_TRANSPORT_BLE) {
         cr = r;
-        std::cout << "APPEARANCE: 0x" << std::hex << r->ble.appearance << ", ADDR_TYPE: '"
-                  << ble_addr_type_str(r->ble.addr_type) << "'" << ", ";
+        std::cout << ", APPEARANCE: 0x" << std::hex << std::setw(4) << std::setfill('0')
+                  << r->ble.appearance << ", ADDR_TYPE: '" << ble_addr_type_str(r->ble.addr_type)
+                  << "'";
       }
       if (r->transport == ESP_HID_TRANSPORT_BT) {
         cr = r;
-        std::cout << "COD: " << esp_hid_cod_major_str(r->bt.cod.major) << "[";
+        std::cout << ", COD: " << esp_hid_cod_major_str(r->bt.cod.major) << "[";
         esp_hid_cod_minor_print(r->bt.cod.minor, stdout);
         std::cout << "] srv 0x" << std::hex << std::setw(3) << std::setfill('0')
-                  << r->bt.cod.service << ", " << r->bt.uuid << ", ";
+                  << r->bt.cod.service << ", " << r->bt.uuid;
       }
 
       if (r->name) {
-        std::cout << "NAME: " << r->name << std::endl;
+        std::cout << ", NAME: " << r->name << std::endl;
       } else {
         std::cout << std::endl;
       }
