@@ -1,14 +1,27 @@
-# ESP32 ESP-IDF Bluetooth keyboard input demo
+# ESP32 ESP-IDF Bluetooth Keyboard Input Demo For Receiving And Processing Keyboard Inputs
 
-(Updated 2022/02/02)
+(Updated 2025-02-09)
 
-(Work in progress... updated for ESP-IDF V4.4)
+- Now using `ESP-IDF V5.4` for development. 
+- Partial support of CMake Presets (compiling using VSCode CMake extensions instead of idf.py)
+- The `BTKeyboard` class is now located in the components folder
+- `keys` renamed to `keys_data` and is now 20 bytes in size. It may need to be larger depending on the keyboard in use.
+- All printf use is gone. Now using ostream.
+- BLE keyboard `Logitech MX Keys Mini` to do pairing. Still doesn't reconnect through the bonding process (connection recovery doesn't work, still investigating).
+- BT keyboard `Logitech K380` works well in both pairing and bonding (recovering after signal lost or ESP32 reboot).
+- Apple Wireless keyboard not working
+
+----
 
 This is a demonstration of an external Bluetooth keyboard sending characters to an ESP32. The code is mainly based on the ESP-IDF's bluetooth/esp_hid_host example, packaged into a class with added support for easier integration with a user application. 
 
-Please look at the `main/main.cpp` file on how to use the class. Note that only one instance of the class can be used.
+Please look at the `main/main.cpp` file on how to use the class. Only one instance of the class should be used to avoid conflicts and resource limitations within the Bluetooth stack.
 
-The class named BTKeyboard waits for a keyboard to be available for pairing through the `BTKeyboard::devices_scan()` method (must be called by the application). It will then cumulate scan codes in a queue to be processed. The class methods available allow for the retrieval of the low-level key scan codes transmitted by the keyboard (`bool wait_for_low_event(BTKeyboard::KeyInfo & inf)` method) or the ASCII characters augmented with function keys values (`char wait_for_ascii_char()` or `char get_ascii_char()` methods). The following list the character values returned (support of other keyboard keys may be added in a future release):
+The class named BTKeyboard waits for a keyboard to be available for pairing through the `BTKeyboard::devices_scan()` method (must be called by the application). It will then accumulate scan codes in a queue to be processed. The class methods available allow for:
+- Retrieval of the low-level key scan codes transmitted by the keyboard (`bool wait_for_low_event(BTKeyboard::KeyInfo & inf)` method)
+- Retrieval of the ASCII characters augmented with function keys values (`char wait_for_ascii_char()` or `char get_ascii_char()` methods)
+
+The following list the character values returned (support of other keyboard keys may be added in a future release):
 
 | Values      | Description      |
 |:-----------:|------------------|
@@ -35,38 +48,41 @@ The class named BTKeyboard waits for a keyboard to be available for pairing thro
 | 0x97        | DownArrow key    |
 | 0x98        | UpArrow key      |
 
-The returned scan codes in the BTKeyboard::KeyInfo structure are defined in chapter 10 of https://usb.org/sites/default/files/hut1_22.pdf and are usually supplied directly by the keyboard. The BTKeyboard class supports up to three keys pressed at the same time. The corresponging scan codes are located in the `keys[3]` field. The `modifier` field contains the CTRL/SHIFT/ALT/META left and right key modifier info.
+The returned scan codes in the BTKeyboard::KeyInfo structure are defined in chapter 10 of the [USB HID Usage Tables document](https://usb.org/sites/default/files/hut1_22.pdf) and are typically provided directly by the keyboard. The BTKeyboard class supports up to three keys pressed at the same time. The corresponding scan codes are located in the `keys_data` field. The `modifier` field contains the CTRL/SHIFT/ALT/META left and right key modifier info.
 
-The main program is a simple demonstration of the usage of the class. The author is using a Logitech K380 keyboard (standard Bluetooth keyboard, not a BLE) for this demo. Other Bluetooth keyboards may work but may require some modification (mainly adding other key scan codes).
+The main program is a simple demonstration of the usage of the class. The author is using a Logitech K380 (standard Bluetooth keyboard, not a BLE) and the recent Logitech MX Keys Mini (BLE) keyboards for this demo. Other Bluetooth keyboards may work but may require some modification (mainly adding other key scan codes). 
 
-The `sdkconfig.defaults` file identifies the ESP-IDF sdkconfig parameters that are required to have this demo working.
+The first-generation Apple wireless keyboard is known to not function correctly.
 
-A bug with ESP-IDF 4.3.x may cause an internal stack overflow. Seems to be corrected in 4.4.
+The `sdkconfig.defaults` file specifies the ESP-IDF sdkconfig parameters required for this demo to work.
 
-This is not ready yet as testing with ESP-IDF 4.4 is ongoing. Seems to work fine at this point in time. 
+A bug in `ESP-IDF 4.3.x` may cause an internal stack overflow due to improper Bluetooth stack resource handling. This issue has been fixed in `ESP-IDF 4.4`.
 
-Please be sure that you have installed the ESP-IDF v4.4 (examples are for Linux/MacOS):
+Testing with `ESP-IDF V5.4` appears to be stable. 
+
+Ensure that you have installed ESP-IDF V4.4 or later (example provided is for Linux/MacOS and V5.4):
 
 ```
 cd ~/esp
-git clone -b release/v4.4 --recursive https://github.com/espressif/esp-idf.git
+git clone -b release/v5.4 --recursive https://github.com/espressif/esp-idf.git
 ```
 
-... and update it to the last v4.4 updates from time to time (git pull):
+... and periodically update it to the latest version using `git pull`:
 
 ```
 cd ~/esp/esp-idf
 git pull
-git submodule --update --init --recursive
+git submodule update --init --recursive
 ```
 
 Some work remains to be done:
 
 - [x] Add pairing code retrieval by the application.
 - [x] CapsLock management
+- [ ] Synchronize the code with the `esp_hid_host` example of ESP-IDF
 - [ ] Some more key mapping
-- [ ] Isolate the class into a ESP-IDF Component
+- [x] Isolate the class into an ESP-IDF Component
 
-Issue(s)
+Issue:
 
-- Typing way too fast (beyond normal keyboard usage) may cause a double panic reset. Still investigating...
+- BLE Keyboard's connexion (`MX Keys Mini`) recovering doesn't seem to work. Still investigating.

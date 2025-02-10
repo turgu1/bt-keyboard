@@ -10,12 +10,18 @@
 
 #include <iostream>
 
+static constexpr char const *TAG = "Main";
+
 BTKeyboard bt_keyboard;
 
 void pairing_handler(uint32_t pid) {
   std::cout << "Please enter the following pairing code, " << std::endl
             << "followed with ENTER on your keyboard: " << pid << std::endl;
 }
+
+void keyboard_lost_connection_handler() { ESP_LOGE(TAG, "Lost connection with keyboard"); }
+
+void keyboard_connected_handler() { ESP_LOGE(TAG, "Connected to keyboard"); }
 
 extern "C" {
 
@@ -33,9 +39,10 @@ void app_main() {
   }
   ESP_ERROR_CHECK(ret);
 
-  if (bt_keyboard.setup(pairing_handler)) { // Must be called once
-    bt_keyboard.devices_scan();             // Required to discover new keyboards and for pairing
-                                            // Default duration is 5 seconds
+  if (bt_keyboard.setup(pairing_handler, keyboard_connected_handler,
+                        keyboard_lost_connection_handler)) { // Must be called once
+    bt_keyboard.devices_scan(); // Required to discover new keyboards and for pairing
+                                // Default duration is 5 seconds
     while (true) {
 #if 0 // 0 = scan codes retrieval, 1 = augmented ASCII retrieval
           uint8_t ch = bt_keyboard.wait_for_ascii_char();

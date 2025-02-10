@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Guy Turcotte
+// Copyright (c) 2020, 2025 Guy Turcotte
 //
 // MIT License. Look at file licenses.txt for details.
 //
@@ -39,7 +39,9 @@
 
 class BTKeyboard {
 public:
-  typedef void pid_handler(uint32_t code);
+  typedef void PairingHandler(uint32_t code);
+  typedef void GotConnectionHandler();
+  typedef void LostConnectionHandler();
 
   const uint8_t KEY_CAPS_LOCK = 0x39;
 
@@ -59,11 +61,30 @@ public:
   const uint8_t ALT_MASK   = ((uint8_t)KeyModifier::L_ALT) | ((uint8_t)KeyModifier::R_ALT);
   const uint8_t META_MASK  = ((uint8_t)KeyModifier::L_META) | ((uint8_t)KeyModifier::R_META);
 
-  static const uint8_t MAX_KEY_DATA_SIZE = 16;
+  static const uint8_t MAX_KEY_DATA_SIZE = 20;
   struct KeyInfo {
     uint8_t size;
     uint8_t keys[MAX_KEY_DATA_SIZE];
+    KeyModifier modifier;
   };
+
+  BTKeyboard()
+      : bt_scan_results_(nullptr), ble_scan_results_(nullptr), num_bt_scan_results_(0),
+        num_ble_scan_results_(0), caps_lock_(false) {}
+
+  bool setup(PairingHandler *pairing_handler                = nullptr,
+             GotConnectionHandler *got_connection_handler   = nullptr,
+             LostConnectionHandler *lost_connection_handler = nullptr);
+  void devices_scan(int seconds_wait_time = 5);
+
+  inline uint8_t get_battery_level() { return battery_level_; }
+  inline bool is_connected() { return connected_; }
+  inline bool wait_for_low_event(KeyInfo &inf, TickType_t duration = portMAX_DELAY) {
+    return xQueueReceive(event_queue_, &inf, duration);
+  }
+
+  char wait_for_ascii_char(bool forever = true);
+  inline char get_ascii_char() { return wait_for_ascii_char(false); }
 
 private:
   static constexpr char const *TAG = "BTKeyboard";
@@ -85,8 +106,8 @@ private:
   static const esp_bt_mode_t HID_HOST_MODE = HIDH_IDLE_MODE;
 #endif
 
-  static SemaphoreHandle_t bt_hidh_cb_semaphore;
-  static SemaphoreHandle_t ble_hidh_cb_semaphore;
+  static SemaphoreHandle_t bt_hidh_cb_semaphore_;
+  static SemaphoreHandle_t ble_hidh_cb_semaphore_;
 
   struct esp_hid_scan_result_t {
     struct esp_hid_scan_result_t *next;
@@ -109,10 +130,30 @@ private:
     };
   };
 
-  esp_hid_scan_result_t *bt_scan_results;
-  esp_hid_scan_result_t *ble_scan_results;
-  size_t num_bt_scan_results;
-  size_t num_ble_scan_results;
+  esp_hid_scan_result_t *bt_scan_results_;
+  esp_hid_scan_result_t *ble_scan_results_;
+  size_t num_bt_scan_results_;
+  size_t num_ble_scan_results_;
+
+  QueueHandle_t event_queue_;
+  int8_t battery_level_;
+  bool key_avail_[MAX_KEY_DATA_SIZE];
+  char last_ch_;
+  TickType_t repeat_period_;
+  bool caps_lock_;
+
+  static const char *gap_bt_prop_type_names_[];
+  static const char *ble_gap_evt_names_[];
+  static const char *bt_gap_evt_names_[];
+  static const char *ble_addr_type_names_[];
+
+  static const char shift_trans_dict_[];
+
+  static BTKeyboard *bt_keyboard_;
+  static PairingHandler *pairing_handler_;
+  static GotConnectionHandler *got_connection_handler_;
+  static LostConnectionHandler *lost_connection_handler_;
+  static bool connected_;
 
   static void hidh_callback(void *handler_args, esp_event_base_t base, int32_t id,
                             void *event_data);
@@ -124,13 +165,6 @@ private:
   static const char *ble_gap_evt_str(uint8_t event);
   static const char *bt_gap_evt_str(uint8_t event);
   static const char *ble_key_type_str(esp_ble_key_type_t key_type);
-
-  static const char *gap_bt_prop_type_names[];
-  static const char *ble_gap_evt_names[];
-  static const char *bt_gap_evt_names[];
-  static const char *ble_addr_type_names[];
-
-  static const char shift_trans_dict[];
 
   void handle_bt_device_result(esp_bt_gap_cb_param_t *param);
   void handle_ble_device_result(esp_ble_gap_cb_param_t *scan_rst);
@@ -150,32 +184,17 @@ private:
   esp_err_t start_bt_scan(uint32_t seconds);
   esp_err_t esp_hid_scan(uint32_t seconds, size_t *num_results, esp_hid_scan_result_t **results);
 
-  inline void set_battery_level(uint8_t level) { battery_level = level; }
-
-  void push_key(uint8_t *keys, uint8_t size);
-
-  QueueHandle_t event_queue;
-  int8_t battery_level;
-  bool key_avail[MAX_KEY_DATA_SIZE];
-  char last_ch;
-  TickType_t repeat_period;
-  pid_handler *pairing_handler;
-  bool caps_lock;
-
-public:
-  BTKeyboard()
-      : bt_scan_results(nullptr), ble_scan_results(nullptr), num_bt_scan_results(0),
-        num_ble_scan_results(0), pairing_handler(nullptr), caps_lock(false) {}
-
-  bool setup(pid_handler *handler = nullptr);
-  void devices_scan(int seconds_wait_time = 5);
-
-  inline uint8_t get_battery_level() { return battery_level; }
-
-  inline bool wait_for_low_event(KeyInfo &inf, TickType_t duration = portMAX_DELAY) {
-    return xQueueReceive(event_queue, &inf, duration);
+  inline void set_battery_level(uint8_t level) { battery_level_ = level; }
+  inline static void set_connected(bool connected) {
+    connected_ = connected;
+    if (connected) {
+      if (got_connection_handler_ != nullptr) {
+        (*got_connection_handler_)();
+      }
+    } else if (lost_connection_handler_ != nullptr) {
+      (*lost_connection_handler_)();
+    }
   }
 
-  char wait_for_ascii_char(bool forever = true);
-  inline char get_ascii_char() { return wait_for_ascii_char(false); }
+  void push_key(uint8_t *keys, uint8_t size);
 };

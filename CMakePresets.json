@@ -26,7 +26,8 @@
                 "CMAKE_CXX_STANDARD_REQUIRED": "ON",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
                 "CMAKE_BUILD_TYPE": "Debug",
-                "BUILD_TYPE": "INKPLATE_BUILD"
+                "BUILD_TYPE": "INKPLATE_BUILD",
+                "SDKCONFIG": "${sourceDir}/build/sdkconfig"
             }
         }
     ],
