@@ -553,7 +553,7 @@ void BTKeyboard::handle_bt_device_result(esp_bt_gap_cb_param_t *param) {
 void BTKeyboard::bt_gap_event_handler(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param) {
   switch (event) {
   case ESP_BT_GAP_DISC_STATE_CHANGED_EVT: {
-    ESP_LOGV(TAG, "BT GAP DISC_STATE %s",
+    ESP_LOGI(TAG, "BT GAP DISC_STATE %s",
              (param->disc_st_chg.state == ESP_BT_GAP_DISCOVERY_STARTED) ? "START" : "STOP");
     if (param->disc_st_chg.state == ESP_BT_GAP_DISCOVERY_STOPPED) {
       SEND_BT_CB();
@@ -565,14 +565,40 @@ void BTKeyboard::bt_gap_event_handler(esp_bt_gap_cb_event_t event, esp_bt_gap_cb
     break;
   }
   case ESP_BT_GAP_KEY_NOTIF_EVT:
-    ESP_LOGV(TAG, "BT GAP KEY_NOTIF passkey:%ld", param->key_notif.passkey);
+    ESP_LOGI(TAG, "BT GAP KEY_NOTIF passkey:%ld", param->key_notif.passkey);
     if (pairing_handler_ != nullptr) (*pairing_handler_)(param->key_notif.passkey);
     break;
-  case ESP_BT_GAP_MODE_CHG_EVT:
-    ESP_LOGV(TAG, "BT GAP MODE_CHG_EVT mode:%d", param->mode_chg.mode);
+  case ESP_BT_GAP_CFM_REQ_EVT: {
+    ESP_LOGI(TAG, "BT GAP CFM_REQ_EVT Please compare the numeric value: %" PRIu32,
+             param->cfm_req.num_val);
+    esp_bt_gap_ssp_confirm_reply(param->cfm_req.bda, true);
     break;
+  }
+  case ESP_BT_GAP_KEY_REQ_EVT:
+    ESP_LOGI(TAG, "BT GAP KEY_REQ_EVT Please enter passkey!");
+    break;
+  case ESP_BT_GAP_MODE_CHG_EVT:
+    ESP_LOGI(TAG, "BT GAP MODE_CHG_EVT mode:%d", param->mode_chg.mode);
+    break;
+  case ESP_BT_GAP_PIN_REQ_EVT: {
+    ESP_LOGI(TAG, "BT GAP PIN_REQ_EVT min_16_digit:%d", param->pin_req.min_16_digit);
+    if (param->pin_req.min_16_digit) {
+      ESP_LOGI(TAG, "Input pin code: 0000 0000 0000 0000");
+      esp_bt_pin_code_t pin_code = {0};
+      esp_bt_gap_pin_reply(param->pin_req.bda, true, 16, pin_code);
+    } else {
+      ESP_LOGI(TAG, "Input pin code: 1234");
+      esp_bt_pin_code_t pin_code;
+      pin_code[0] = '1';
+      pin_code[1] = '2';
+      pin_code[2] = '3';
+      pin_code[3] = '4';
+      esp_bt_gap_pin_reply(param->pin_req.bda, true, 4, pin_code);
+    }
+    break;
+  }
   default:
-    ESP_LOGV(TAG, "BT GAP EVENT %s", bt_gap_evt_str(event));
+    ESP_LOGI(TAG, "BT GAP EVENT %s", bt_gap_evt_str(event));
     break;
   }
 }
@@ -639,7 +665,7 @@ void BTKeyboard::ble_gap_event_handler(esp_gap_ble_cb_event_t event,
     // SCAN
 
   case ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT: {
-    ESP_LOGV(TAG, "BLE GAP EVENT SCAN_PARAM_SET_COMPLETE");
+    ESP_LOGI(TAG, "BLE GAP EVENT SCAN_PARAM_SET_COMPLETE");
     SEND_BLE_CB();
     break;
   }
@@ -650,7 +676,7 @@ void BTKeyboard::ble_gap_event_handler(esp_gap_ble_cb_event_t event,
       break;
     }
     case ESP_GAP_SEARCH_INQ_CMPL_EVT:
-      ESP_LOGV(TAG, "BLE GAP EVENT SCAN DONE: %d", param->scan_rst.num_resps);
+      ESP_LOGI(TAG, "BLE GAP EVENT SCAN DONE: %d", param->scan_rst.num_resps);
       SEND_BLE_CB();
       break;
     default:
@@ -659,18 +685,18 @@ void BTKeyboard::ble_gap_event_handler(esp_gap_ble_cb_event_t event,
     break;
   }
   case ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT: {
-    ESP_LOGV(TAG, "BLE GAP EVENT SCAN CANCELED");
+    ESP_LOGI(TAG, "BLE GAP EVENT SCAN CANCELED");
     break;
   }
 
     // ADVERTISEMENT
 
   case ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVT:
-    ESP_LOGV(TAG, "BLE GAP ADV_DATA_SET_COMPLETE");
+    ESP_LOGI(TAG, "BLE GAP ADV_DATA_SET_COMPLETE");
     break;
 
   case ESP_GAP_BLE_ADV_START_COMPLETE_EVT:
-    ESP_LOGV(TAG, "BLE GAP ADV_START_COMPLETE");
+    ESP_LOGI(TAG, "BLE GAP ADV_START_COMPLETE");
     break;
 
     // AUTHENTICATION
@@ -679,18 +705,18 @@ void BTKeyboard::ble_gap_event_handler(esp_gap_ble_cb_event_t event,
     if (!param->ble_security.auth_cmpl.success) {
       ESP_LOGE(TAG, "BLE GAP AUTH ERROR: 0x%x", param->ble_security.auth_cmpl.fail_reason);
     } else {
-      ESP_LOGV(TAG, "BLE GAP AUTH SUCCESS");
+      ESP_LOGI(TAG, "BLE GAP AUTH SUCCESS");
     }
     break;
 
   case ESP_GAP_BLE_KEY_EVT: // shows the ble key info share with peer device to the user.
-    ESP_LOGV(TAG, "BLE GAP KEY type = %s", ble_key_type_str(param->ble_security.ble_key.key_type));
+    ESP_LOGI(TAG, "BLE GAP KEY type = %s", ble_key_type_str(param->ble_security.ble_key.key_type));
     break;
 
   case ESP_GAP_BLE_PASSKEY_NOTIF_EVT: // ESP_IO_CAP_OUT
     // The app will receive this evt when the IO has Output capability and the peer device IO has
     // Input capability. Show the passkey number to the user to input it in the peer device.
-    ESP_LOGV(TAG, "BLE GAP PASSKEY_NOTIF passkey:%ld", param->ble_security.key_notif.passkey);
+    ESP_LOGI(TAG, "BLE GAP PASSKEY_NOTIF passkey:%ld", param->ble_security.key_notif.passkey);
     if (pairing_handler_ != nullptr) (*pairing_handler_)(param->ble_security.key_notif.passkey);
     break;
 
@@ -698,19 +724,19 @@ void BTKeyboard::ble_gap_event_handler(esp_gap_ble_cb_event_t event,
     // The app will receive this event when the IO has DisplayYesNO capability and the peer device
     // IO also has DisplayYesNo capability. show the passkey number to the user to confirm it with
     // the number displayed by peer device.
-    ESP_LOGV(TAG, "BLE GAP NC_REQ passkey:%ld", param->ble_security.key_notif.passkey);
+    ESP_LOGI(TAG, "BLE GAP NC_REQ passkey:%ld", param->ble_security.key_notif.passkey);
     esp_ble_confirm_reply(param->ble_security.key_notif.bd_addr, true);
     break;
 
   case ESP_GAP_BLE_PASSKEY_REQ_EVT: // ESP_IO_CAP_IN
     // The app will receive this evt when the IO has Input capability and the peer device IO has
     // Output capability. See the passkey number on the peer device and send it back.
-    ESP_LOGV(TAG, "BLE GAP PASSKEY_REQ");
+    ESP_LOGI(TAG, "BLE GAP PASSKEY_REQ");
     // esp_ble_passkey_reply(param->ble_security.ble_req.bd_addr, true, 1234);
     break;
 
   case ESP_GAP_BLE_SEC_REQ_EVT:
-    ESP_LOGV(TAG, "BLE GAP SEC_REQ");
+    ESP_LOGI(TAG, "BLE GAP SEC_REQ");
     // Send the positive(true) security response to the peer device to accept the security request.
     // If not accept the security request, should send the security response with negative(false)
     // accept value.
@@ -718,7 +744,7 @@ void BTKeyboard::ble_gap_event_handler(esp_gap_ble_cb_event_t event,
     break;
 
   default:
-    ESP_LOGV(TAG, "BLE GAP EVENT %s", ble_gap_evt_str(event));
+    ESP_LOGI(TAG, "BLE GAP EVENT %s", ble_gap_evt_str(event));
     break;
   }
 }
@@ -731,99 +757,6 @@ esp_err_t BTKeyboard::start_bt_scan(uint32_t seconds) {
     return ret;
   }
   return ret;
-}
-
-esp_err_t BTKeyboard::esp_hid_ble_gap_adv_init(uint16_t appearance, const char *device_name) {
-
-  esp_err_t ret;
-
-  const uint8_t hidd_service_uuid128[] = {
-      0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80,
-      0x00, 0x10, 0x00, 0x00, 0x12, 0x18, 0x00, 0x00,
-  };
-
-  esp_ble_adv_data_t ble_adv_data = {
-      .set_scan_rsp     = false,
-      .include_name     = true,
-      .include_txpower  = true,
-      .min_interval     = 0x0006, // slave connection min interval, Time = min_interval * 1.25 msec
-      .max_interval     = 0x0010, // slave connection max interval, Time = max_interval * 1.25 msec
-      .appearance       = appearance,
-      .manufacturer_len = 0,
-      .p_manufacturer_data = NULL,
-      .service_data_len    = 0,
-      .p_service_data      = NULL,
-      .service_uuid_len    = sizeof(hidd_service_uuid128),
-      .p_service_uuid      = (uint8_t *)hidd_service_uuid128,
-      .flag                = 0x6,
-  };
-
-  esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_MITM_BOND;
-  // esp_ble_io_cap_t iocap = ESP_IO_CAP_OUT;//you have to enter the key on the host
-  // esp_ble_io_cap_t iocap = ESP_IO_CAP_IN;//you have to enter the key on the device
-  esp_ble_io_cap_t iocap = ESP_IO_CAP_IO; // you have to agree that key matches on both
-  // esp_ble_io_cap_t iocap = ESP_IO_CAP_NONE;//device is not capable of input or output, insecure
-  uint8_t init_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
-  uint8_t rsp_key  = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
-  uint8_t key_size = 16;   // the key size should be 7~16 bytes
-  uint32_t passkey = 1234; // ESP_IO_CAP_OUT
-
-  if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_AUTHEN_REQ_MODE, &auth_req, 1)) != ESP_OK) {
-    ESP_LOGE(TAG, "GAP set_security_param AUTHEN_REQ_MODE failed: %d", ret);
-    return ret;
-  }
-
-  if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_IOCAP_MODE, &iocap, 1)) != ESP_OK) {
-    ESP_LOGE(TAG, "GAP set_security_param IOCAP_MODE failed: %d", ret);
-    return ret;
-  }
-
-  if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_SET_INIT_KEY, &init_key, 1)) != ESP_OK) {
-    ESP_LOGE(TAG, "GAP set_security_param SET_INIT_KEY failed: %d", ret);
-    return ret;
-  }
-
-  if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_SET_RSP_KEY, &rsp_key, 1)) != ESP_OK) {
-    ESP_LOGE(TAG, "GAP set_security_param SET_RSP_KEY failed: %d", ret);
-    return ret;
-  }
-
-  if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_MAX_KEY_SIZE, &key_size, 1)) != ESP_OK) {
-    ESP_LOGE(TAG, "GAP set_security_param MAX_KEY_SIZE failed: %d", ret);
-    return ret;
-  }
-
-  if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_SET_STATIC_PASSKEY, &passkey,
-                                            sizeof(uint32_t))) != ESP_OK) {
-    ESP_LOGE(TAG, "GAP set_security_param SET_STATIC_PASSKEY failed: %d", ret);
-    return ret;
-  }
-
-  if ((ret = esp_ble_gap_set_device_name(device_name)) != ESP_OK) {
-    ESP_LOGE(TAG, "GAP set_device_name failed: %d", ret);
-    return ret;
-  }
-
-  if ((ret = esp_ble_gap_config_adv_data(&ble_adv_data)) != ESP_OK) {
-    ESP_LOGE(TAG, "GAP config_adv_data failed: %d", ret);
-    return ret;
-  }
-
-  return ret;
-}
-
-esp_err_t BTKeyboard::esp_hid_ble_gap_adv_start(void) {
-  static esp_ble_adv_params_t hidd_adv_params = {
-      .adv_int_min       = 0x20,
-      .adv_int_max       = 0x30,
-      .adv_type          = ADV_TYPE_IND,
-      .own_addr_type     = BLE_ADDR_TYPE_PUBLIC,
-      .peer_addr         = {0},
-      .peer_addr_type    = BLE_ADDR_TYPE_PUBLIC,
-      .channel_map       = ADV_CHNL_ALL,
-      .adv_filter_policy = ADV_FILTER_ALLOW_SCAN_ANY_CON_ANY,
-  };
-  return esp_ble_gap_start_advertising(&hidd_adv_params);
 }
 
 esp_err_t BTKeyboard::start_ble_scan(uint32_t seconds) {
@@ -873,7 +806,7 @@ esp_err_t BTKeyboard::esp_hid_scan(uint32_t seconds, size_t *num_results,
   *results     = bt_scan_results_;
 
   if (num_bt_scan_results_) {
-    while (bt_scan_results_->next != NULL) {
+    while (bt_scan_results_->next != nullptr) {
       bt_scan_results_ = bt_scan_results_->next;
     }
     bt_scan_results_->next = ble_scan_results_;
@@ -882,9 +815,9 @@ esp_err_t BTKeyboard::esp_hid_scan(uint32_t seconds, size_t *num_results,
   }
 
   num_bt_scan_results_  = 0;
-  bt_scan_results_      = NULL;
+  bt_scan_results_      = nullptr;
   num_ble_scan_results_ = 0;
-  ble_scan_results_     = NULL;
+  ble_scan_results_     = nullptr;
 
   return ESP_OK;
 }
@@ -894,25 +827,25 @@ void BTKeyboard::devices_scan(int seconds_wait_time) {
   if (connected_) return;
 
   size_t results_len             = 0;
-  esp_hid_scan_result_t *results = NULL;
-  ESP_LOGV(TAG, "SCAN...");
+  esp_hid_scan_result_t *results = nullptr;
+  ESP_LOGI(TAG, "SCAN...");
 
   // start scan for HID devices
 
   esp_hid_scan(seconds_wait_time, &results_len, &results);
-  ESP_LOGV(TAG, "SCAN: %u results", results_len);
+  ESP_LOGI(TAG, "SCAN: %u results", results_len);
+
   if (results_len) {
     esp_hid_scan_result_t *r  = results;
-    esp_hid_scan_result_t *cr = NULL;
-    uint16_t appearance       = r->ble.appearance;
+    esp_hid_scan_result_t *cr = nullptr;
     while (r) {
+      uint16_t appearance = r->ble.appearance;
       std::cout << "  " << (r->transport == ESP_HID_TRANSPORT_BLE ? "BLE: " : "BT: ") << r->bda
                 << std::dec << ", RSSI: " << +r->rssi << ", USAGE: " << esp_hid_usage_str(r->usage);
       if (r->transport == ESP_HID_TRANSPORT_BLE) {
         cr = r;
         std::cout << ", APPEARANCE: 0x" << std::hex << std::setw(4) << std::setfill('0')
-                  << appearance << ", ADDR_TYPE: '" << ble_addr_type_str(r->ble.addr_type) << "'"
-                  << std::dec;
+                  << appearance << ", ADDR_TYPE: '" << ble_addr_type_str(r->ble.addr_type) << "'";
       }
       if (r->transport == ESP_HID_TRANSPORT_BT) {
         cr = r;
@@ -929,10 +862,12 @@ void BTKeyboard::devices_scan(int seconds_wait_time) {
       }
       r = r->next;
     }
-    if (cr) {
-      // open the last result
-      esp_hidh_dev_open(cr->bda, cr->transport, cr->ble.addr_type);
-    }
+
+    // if (cr) {
+    //   // open the last result
+    //   esp_hidh_dev_open(cr->bda, cr->transport, cr->ble.addr_type);
+    // }
+
     // free the results
     esp_hid_scan_results_free(results);
   }
@@ -947,10 +882,12 @@ void BTKeyboard::hidh_callback(void *handler_args, esp_event_base_t base, int32_
   case ESP_HIDH_OPEN_EVENT: {
     if (param->open.status == ESP_OK) {
       const uint8_t *bda = esp_hidh_dev_bda_get(param->open.dev);
-      ESP_LOGV(TAG, ESP_BD_ADDR_STR " OPEN: %s", ESP_BD_ADDR_HEX(bda),
-               esp_hidh_dev_name_get(param->open.dev));
-      esp_hidh_dev_dump(param->open.dev, stdout);
-      set_connected(true);
+      if (bda) {
+        ESP_LOGI(TAG, ESP_BD_ADDR_STR " OPEN: %s", ESP_BD_ADDR_HEX(bda),
+                 esp_hidh_dev_name_get(param->open.dev));
+        esp_hidh_dev_dump(param->open.dev, stdout);
+        set_connected(true);
+      }
     } else {
       ESP_LOGE(TAG, " OPEN failed!");
       set_connected(false);
@@ -959,37 +896,44 @@ void BTKeyboard::hidh_callback(void *handler_args, esp_event_base_t base, int32_
   }
   case ESP_HIDH_BATTERY_EVENT: {
     const uint8_t *bda = esp_hidh_dev_bda_get(param->battery.dev);
-    ESP_LOGV(TAG, ESP_BD_ADDR_STR " BATTERY: %d%%", ESP_BD_ADDR_HEX(bda), param->battery.level);
-    bt_keyboard_->set_battery_level(param->battery.level);
+    if (bda) {
+      ESP_LOGI(TAG, ESP_BD_ADDR_STR " BATTERY: %d%%", ESP_BD_ADDR_HEX(bda), param->battery.level);
+      bt_keyboard_->set_battery_level(param->battery.level);
+    }
     break;
   }
   case ESP_HIDH_INPUT_EVENT: {
     const uint8_t *bda = esp_hidh_dev_bda_get(param->input.dev);
-    ESP_LOGV(TAG,
-             ESP_BD_ADDR_STR " INPUT: %8s, MAP: %2u, ID: %3u, Len: %d, Data:", ESP_BD_ADDR_HEX(bda),
-             esp_hid_usage_str(param->input.usage), param->input.map_index, param->input.report_id,
-             param->input.length);
-    ESP_LOG_BUFFER_HEX_LEVEL(TAG, param->input.data, param->input.length, ESP_LOG_DEBUG);
-    bt_keyboard_->push_key(param->input.data, param->input.length);
+    if (bda) {
+      ESP_LOGI(TAG, ESP_BD_ADDR_STR " INPUT: %8s, MAP: %2u, ID: %3u, Len: %d, Data:",
+               ESP_BD_ADDR_HEX(bda), esp_hid_usage_str(param->input.usage), param->input.map_index,
+               param->input.report_id, param->input.length);
+      ESP_LOG_BUFFER_HEX_LEVEL(TAG, param->input.data, param->input.length, ESP_LOG_DEBUG);
+      bt_keyboard_->push_key(param->input.data, param->input.length);
+    }
     break;
   }
   case ESP_HIDH_FEATURE_EVENT: {
     const uint8_t *bda = esp_hidh_dev_bda_get(param->feature.dev);
-    ESP_LOGV(TAG, ESP_BD_ADDR_STR " FEATURE: %8s, MAP: %2u, ID: %3u, Len: %d", ESP_BD_ADDR_HEX(bda),
-             esp_hid_usage_str(param->feature.usage), param->feature.map_index,
-             param->feature.report_id, param->feature.length);
-    ESP_LOG_BUFFER_HEX_LEVEL(TAG, param->feature.data, param->feature.length, ESP_LOG_DEBUG);
+    if (bda) {
+      ESP_LOGI(TAG, ESP_BD_ADDR_STR " FEATURE: %8s, MAP: %2u, ID: %3u, Len: %d",
+               ESP_BD_ADDR_HEX(bda), esp_hid_usage_str(param->feature.usage),
+               param->feature.map_index, param->feature.report_id, param->feature.length);
+      ESP_LOG_BUFFER_HEX_LEVEL(TAG, param->feature.data, param->feature.length, ESP_LOG_DEBUG);
+    }
     break;
   }
   case ESP_HIDH_CLOSE_EVENT: {
     const uint8_t *bda = esp_hidh_dev_bda_get(param->close.dev);
-    ESP_LOGV(TAG, ESP_BD_ADDR_STR " CLOSE: %s", ESP_BD_ADDR_HEX(bda),
-             esp_hidh_dev_name_get(param->close.dev));
-    set_connected(false);
+    if (bda) {
+      ESP_LOGI(TAG, ESP_BD_ADDR_STR " CLOSE: %s", ESP_BD_ADDR_HEX(bda),
+               esp_hidh_dev_name_get(param->close.dev));
+      set_connected(false);
+    }
     break;
   }
   default:
-    ESP_LOGV(TAG, "EVENT: %d", event);
+    ESP_LOGI(TAG, "EVENT: %d", event);
     break;
   }
 }

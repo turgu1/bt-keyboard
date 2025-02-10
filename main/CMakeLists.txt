@@ -1,4 +1,4 @@
-cmake_minimum_required(3.16.0)
+cmake_minimum_required(VERSION 3.16.0)
 
 file(GLOB_RECURSE app_sources ${CMAKE_SOURCE_DIR}/main/*.*)
 set(include_dirs ${CMAKE_SOURCE_DIR}/include)

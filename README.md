@@ -4,11 +4,11 @@
 
 - Now using `ESP-IDF V5.4` for development. 
 - Partial support of CMake Presets (compiling using VSCode CMake extensions instead of idf.py).
-- The `BTKeyboard` class is now located in the components folder.
+- The `BTKeyboard` class is now located in the `components` folder.
 - Added `show_bonded_devices()` and `remove_all_bonded_devices()` methods. Useful for debugging.
 - `keys` renamed to `keys_data` and is now 20 bytes in size. It may need to be larger depending on the keyboard in use.
 - All printf use is gone. Now using ostream.
-- BLE keyboard `Logitech MX Keys Mini` to do pairing. Still doesn't reconnect through the bonding process (connection recovery doesn't work, still investigating).
+- BLE keyboard `Logitech MX Keys Mini` is able to do pairing. Still doesn't reconnect through the bonding process (connection recovery doesn't work, still investigating).
 - BT keyboard `Logitech K380` works well in both pairing and bonding (recovering after signal lost or ESP32 reboot).
 - Apple Wireless keyboard not working.
 
