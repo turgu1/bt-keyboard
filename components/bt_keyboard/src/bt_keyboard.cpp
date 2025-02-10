@@ -122,9 +122,11 @@ static std::ostream &operator<<(std::ostream &os, const esp_bt_uuid_t &uuid) {
     os << "UUID32: 0x" << std::hex << std::setw(8) << uuid.uuid.uuid32;
   } else if (uuid.len == ESP_UUID_LEN_128) {
     os << "UUID128: ";
-    os << std::setw(2) << std::hex << +uuid.uuid.uuid128[0];
-    for (uint i = 1; i < 16; ++i) {
-      os << "," << std::setw(2) << std::hex << +uuid.uuid.uuid128[i];
+    for (uint i = 0; i < 16; ++i) {
+      if (i == 4 || i == 6 || i == 8 || i == 10) {
+        os << '-';
+      }
+      os << std::setw(2) << std::hex << +uuid.uuid.uuid128[i];
     }
   }
 
@@ -731,6 +733,99 @@ esp_err_t BTKeyboard::start_bt_scan(uint32_t seconds) {
   return ret;
 }
 
+esp_err_t BTKeyboard::esp_hid_ble_gap_adv_init(uint16_t appearance, const char *device_name) {
+
+  esp_err_t ret;
+
+  const uint8_t hidd_service_uuid128[] = {
+      0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80,
+      0x00, 0x10, 0x00, 0x00, 0x12, 0x18, 0x00, 0x00,
+  };
+
+  esp_ble_adv_data_t ble_adv_data = {
+      .set_scan_rsp     = false,
+      .include_name     = true,
+      .include_txpower  = true,
+      .min_interval     = 0x0006, // slave connection min interval, Time = min_interval * 1.25 msec
+      .max_interval     = 0x0010, // slave connection max interval, Time = max_interval * 1.25 msec
+      .appearance       = appearance,
+      .manufacturer_len = 0,
+      .p_manufacturer_data = NULL,
+      .service_data_len    = 0,
+      .p_service_data      = NULL,
+      .service_uuid_len    = sizeof(hidd_service_uuid128),
+      .p_service_uuid      = (uint8_t *)hidd_service_uuid128,
+      .flag                = 0x6,
+  };
+
+  esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_MITM_BOND;
+  // esp_ble_io_cap_t iocap = ESP_IO_CAP_OUT;//you have to enter the key on the host
+  // esp_ble_io_cap_t iocap = ESP_IO_CAP_IN;//you have to enter the key on the device
+  esp_ble_io_cap_t iocap = ESP_IO_CAP_IO; // you have to agree that key matches on both
+  // esp_ble_io_cap_t iocap = ESP_IO_CAP_NONE;//device is not capable of input or output, insecure
+  uint8_t init_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
+  uint8_t rsp_key  = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
+  uint8_t key_size = 16;   // the key size should be 7~16 bytes
+  uint32_t passkey = 1234; // ESP_IO_CAP_OUT
+
+  if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_AUTHEN_REQ_MODE, &auth_req, 1)) != ESP_OK) {
+    ESP_LOGE(TAG, "GAP set_security_param AUTHEN_REQ_MODE failed: %d", ret);
+    return ret;
+  }
+
+  if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_IOCAP_MODE, &iocap, 1)) != ESP_OK) {
+    ESP_LOGE(TAG, "GAP set_security_param IOCAP_MODE failed: %d", ret);
+    return ret;
+  }
+
+  if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_SET_INIT_KEY, &init_key, 1)) != ESP_OK) {
+    ESP_LOGE(TAG, "GAP set_security_param SET_INIT_KEY failed: %d", ret);
+    return ret;
+  }
+
+  if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_SET_RSP_KEY, &rsp_key, 1)) != ESP_OK) {
+    ESP_LOGE(TAG, "GAP set_security_param SET_RSP_KEY failed: %d", ret);
+    return ret;
+  }
+
+  if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_MAX_KEY_SIZE, &key_size, 1)) != ESP_OK) {
+    ESP_LOGE(TAG, "GAP set_security_param MAX_KEY_SIZE failed: %d", ret);
+    return ret;
+  }
+
+  if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_SET_STATIC_PASSKEY, &passkey,
+                                            sizeof(uint32_t))) != ESP_OK) {
+    ESP_LOGE(TAG, "GAP set_security_param SET_STATIC_PASSKEY failed: %d", ret);
+    return ret;
+  }
+
+  if ((ret = esp_ble_gap_set_device_name(device_name)) != ESP_OK) {
+    ESP_LOGE(TAG, "GAP set_device_name failed: %d", ret);
+    return ret;
+  }
+
+  if ((ret = esp_ble_gap_config_adv_data(&ble_adv_data)) != ESP_OK) {
+    ESP_LOGE(TAG, "GAP config_adv_data failed: %d", ret);
+    return ret;
+  }
+
+  return ret;
+}
+
+esp_err_t BTKeyboard::esp_hid_ble_gap_adv_start(void) {
+  static esp_ble_adv_params_t hidd_adv_params = {
+      .adv_int_min       = 0x20,
+      .adv_int_max       = 0x30,
+      .adv_type          = ADV_TYPE_IND,
+      .own_addr_type     = BLE_ADDR_TYPE_PUBLIC,
+      .peer_addr         = {0},
+      .peer_addr_type    = BLE_ADDR_TYPE_PUBLIC,
+      .channel_map       = ADV_CHNL_ALL,
+      .adv_filter_policy = ADV_FILTER_ALLOW_SCAN_ANY_CON_ANY,
+  };
+  return esp_ble_gap_start_advertising(&hidd_adv_params);
+}
+
 esp_err_t BTKeyboard::start_ble_scan(uint32_t seconds) {
   static esp_ble_scan_params_t hid_scan_params = {
       .scan_type          = BLE_SCAN_TYPE_ACTIVE,
@@ -966,4 +1061,46 @@ char BTKeyboard::wait_for_ascii_char(bool forever) {
 
     last_ch_ = 0;
   }
+}
+
+void BTKeyboard::show_bonded_devices(void) {
+  int dev_num = esp_ble_get_bond_device_num();
+  if (dev_num == 0) {
+    ESP_LOGI(TAG, "Bonded devices number zero\n");
+    return;
+  }
+
+  esp_ble_bond_dev_t *dev_list = (esp_ble_bond_dev_t *)malloc(sizeof(esp_ble_bond_dev_t) * dev_num);
+  if (!dev_list) {
+    ESP_LOGI(TAG, "malloc failed, return\n");
+    return;
+  }
+  esp_ble_get_bond_device_list(&dev_num, dev_list);
+  ESP_LOGI(TAG, "Bonded devices number %d", dev_num);
+  for (int i = 0; i < dev_num; i++) {
+    ESP_LOGI(TAG, "[%u] addr_type %u, addr " ESP_BD_ADDR_STR "", i, dev_list[i].bd_addr_type,
+             ESP_BD_ADDR_HEX(dev_list[i].bd_addr));
+  }
+
+  free(dev_list);
+}
+
+void BTKeyboard::remove_all_bonded_devices() {
+  int dev_num = esp_ble_get_bond_device_num();
+  if (dev_num == 0) {
+    ESP_LOGI(TAG, "Bonded devices number zero\n");
+    return;
+  }
+
+  esp_ble_bond_dev_t *dev_list = (esp_ble_bond_dev_t *)malloc(sizeof(esp_ble_bond_dev_t) * dev_num);
+  if (!dev_list) {
+    ESP_LOGI(TAG, "malloc failed, return\n");
+    return;
+  }
+  esp_ble_get_bond_device_list(&dev_num, dev_list);
+  for (int i = 0; i < dev_num; i++) {
+    esp_ble_remove_bond_device(dev_list[i].bd_addr);
+  }
+
+  free(dev_list);
 }

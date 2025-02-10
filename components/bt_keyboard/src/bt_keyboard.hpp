@@ -85,6 +85,8 @@ public:
 
   char wait_for_ascii_char(bool forever = true);
   inline char get_ascii_char() { return wait_for_ascii_char(false); }
+  void show_bonded_devices();
+  void remove_all_bonded_devices();
 
 private:
   static constexpr char const *TAG = "BTKeyboard";
@@ -183,6 +185,9 @@ private:
   esp_err_t start_ble_scan(uint32_t seconds);
   esp_err_t start_bt_scan(uint32_t seconds);
   esp_err_t esp_hid_scan(uint32_t seconds, size_t *num_results, esp_hid_scan_result_t **results);
+
+  esp_err_t esp_hid_ble_gap_adv_start(void);
+  esp_err_t esp_hid_ble_gap_adv_init(uint16_t appearance, const char *device_name);
 
   inline void set_battery_level(uint8_t level) { battery_level_ = level; }
   inline static void set_connected(bool connected) {
