@@ -22,10 +22,13 @@
 
 #pragma once
 
+<<<<<<< Refactoring
 #include <forward_list>
 #include <memory>
 #include <string>
 
+=======
+>>>>>>> master
 #include "esp_bt.h"
 #include "esp_bt_defs.h"
 #include "esp_bt_main.h"
@@ -41,6 +44,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 
+<<<<<<< Refactoring
 std::ostream &operator<<(std::ostream &os, const esp_bd_addr_t &addr);
 std::ostream &operator<<(std::ostream &os, const esp_bt_uuid_t &uuid);
 
@@ -78,6 +82,11 @@ public:
   typedef void PairingHandler(uint32_t code);
   typedef void GotConnectionHandler();
   typedef void LostConnectionHandler();
+=======
+class BTKeyboard {
+public:
+  typedef void pid_handler(uint32_t code);
+>>>>>>> master
 
   const uint8_t KEY_CAPS_LOCK = 0x39;
 
@@ -99,6 +108,7 @@ public:
 
   static const uint8_t MAX_KEY_DATA_SIZE = 20;
   struct KeyInfo {
+<<<<<<< Refactoring
     uint8_t     size;
     uint8_t     keys[MAX_KEY_DATA_SIZE];
     KeyModifier modifier;
@@ -124,6 +134,14 @@ public:
 
 private:
   static constexpr char const *TAG          = "BTKeyboard";
+=======
+    uint8_t size;
+    uint8_t keys[MAX_KEY_DATA_SIZE];
+  };
+
+private:
+  static constexpr char const *TAG = "BTKeyboard";
+>>>>>>> master
 
   static const esp_bt_mode_t HIDH_IDLE_MODE = (esp_bt_mode_t)0x00;
   static const esp_bt_mode_t HIDH_BLE_MODE  = (esp_bt_mode_t)0x01;
@@ -131,17 +149,26 @@ private:
   static const esp_bt_mode_t HIDH_BTDM_MODE = (esp_bt_mode_t)0x03;
 
 #if CONFIG_BT_HID_HOST_ENABLED
+<<<<<<< Refactoring
   #if CONFIG_BT_BLE_ENABLED
   static const esp_bt_mode_t HID_HOST_MODE = HIDH_BTDM_MODE;
   #else
   static const esp_bt_mode_t HID_HOST_MODE = HIDH_BT_MODE;
   #endif
+=======
+#if CONFIG_BT_BLE_ENABLED
+  static const esp_bt_mode_t HID_HOST_MODE = HIDH_BTDM_MODE;
+#else
+  static const esp_bt_mode_t HID_HOST_MODE = HIDH_BT_MODE;
+#endif
+>>>>>>> master
 #elif CONFIG_BT_BLE_ENABLED
   static const esp_bt_mode_t HID_HOST_MODE = HIDH_BLE_MODE;
 #else
   static const esp_bt_mode_t HID_HOST_MODE = HIDH_IDLE_MODE;
 #endif
 
+<<<<<<< Refactoring
   static SemaphoreHandle_t bt_hidh_cb_semaphore_;
   static SemaphoreHandle_t ble_hidh_cb_semaphore_;
 
@@ -150,20 +177,41 @@ private:
     std::string         name;
     int8_t              rssi;
     esp_hid_usage_t     usage;
+=======
+  static SemaphoreHandle_t bt_hidh_cb_semaphore;
+  static SemaphoreHandle_t ble_hidh_cb_semaphore;
+
+  struct esp_hid_scan_result_t {
+    struct esp_hid_scan_result_t *next;
+
+    esp_bd_addr_t bda;
+    const char *name;
+    int8_t rssi;
+    esp_hid_usage_t usage;
+>>>>>>> master
     esp_hid_transport_t transport; // BT, BLE or USB
 
     union {
       struct {
+<<<<<<< Refactoring
         esp_bt_cod_t  cod;
+=======
+        esp_bt_cod_t cod;
+>>>>>>> master
         esp_bt_uuid_t uuid;
       } bt;
       struct {
         esp_ble_addr_type_t addr_type;
+<<<<<<< Refactoring
         uint16_t            appearance;
+=======
+        uint16_t appearance;
+>>>>>>> master
       } ble;
     };
   };
 
+<<<<<<< Refactoring
   typedef std::forward_list<std::unique_ptr<esp_hid_scan_result_t>> ScanResult;
 
   ScanResult bt_scan_results_;
@@ -235,4 +283,75 @@ private:
   }
 
   void push_key(uint8_t *keys, uint8_t size);
+=======
+  esp_hid_scan_result_t *bt_scan_results;
+  esp_hid_scan_result_t *ble_scan_results;
+  size_t num_bt_scan_results;
+  size_t num_ble_scan_results;
+
+  static void hidh_callback(void *handler_args, esp_event_base_t base, int32_t id,
+                            void *event_data);
+
+  static void bt_gap_event_handler(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param);
+  static void ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param);
+
+  static const char *ble_addr_type_str(esp_ble_addr_type_t ble_addr_type);
+  static const char *ble_gap_evt_str(uint8_t event);
+  static const char *bt_gap_evt_str(uint8_t event);
+  static const char *ble_key_type_str(esp_ble_key_type_t key_type);
+
+  static const char *gap_bt_prop_type_names[];
+  static const char *ble_gap_evt_names[];
+  static const char *bt_gap_evt_names[];
+  static const char *ble_addr_type_names[];
+
+  static const char shift_trans_dict[];
+
+  void handle_bt_device_result(esp_bt_gap_cb_param_t *param);
+  void handle_ble_device_result(esp_ble_gap_cb_param_t *scan_rst);
+
+  void esp_hid_scan_results_free(esp_hid_scan_result_t *results);
+  esp_hid_scan_result_t *find_scan_result(esp_bd_addr_t bda, esp_hid_scan_result_t *results);
+
+  void add_bt_scan_result(esp_bd_addr_t bda, esp_bt_cod_t *cod, esp_bt_uuid_t *uuid, uint8_t *name,
+                          uint8_t name_len, int rssi);
+
+  void add_ble_scan_result(esp_bd_addr_t bda, esp_ble_addr_type_t addr_type, uint16_t appearance,
+                           uint8_t *name, uint8_t name_len, int rssi);
+
+  void print_uuid(esp_bt_uuid_t *uuid);
+
+  esp_err_t start_ble_scan(uint32_t seconds);
+  esp_err_t start_bt_scan(uint32_t seconds);
+  esp_err_t esp_hid_scan(uint32_t seconds, size_t *num_results, esp_hid_scan_result_t **results);
+
+  inline void set_battery_level(uint8_t level) { battery_level = level; }
+
+  void push_key(uint8_t *keys, uint8_t size);
+
+  QueueHandle_t event_queue;
+  int8_t battery_level;
+  bool key_avail[MAX_KEY_DATA_SIZE];
+  char last_ch;
+  TickType_t repeat_period;
+  pid_handler *pairing_handler;
+  bool caps_lock;
+
+public:
+  BTKeyboard()
+      : bt_scan_results(nullptr), ble_scan_results(nullptr), num_bt_scan_results(0),
+        num_ble_scan_results(0), pairing_handler(nullptr), caps_lock(false) {}
+
+  bool setup(pid_handler *handler = nullptr);
+  void devices_scan(int seconds_wait_time = 5);
+
+  inline uint8_t get_battery_level() { return battery_level; }
+
+  inline bool wait_for_low_event(KeyInfo &inf, TickType_t duration = portMAX_DELAY) {
+    return xQueueReceive(event_queue, &inf, duration);
+  }
+
+  char wait_for_ascii_char(bool forever = true);
+  inline char get_ascii_char() { return wait_for_ascii_char(false); }
+>>>>>>> master
 };
