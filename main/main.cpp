@@ -2,13 +2,13 @@
 //
 // MIT License. Look at file licenses.txt for details.
 
+#include <iostream>
+
 #include "bt_keyboard.hpp"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "nvs_flash.h"
-
-#include <iostream>
 
 static constexpr char const *TAG = "Main";
 
@@ -64,7 +64,6 @@ void app_main() {
         std::cout << std::hex << +inf.keys[n] << ", ";
       }
       std::cout << std::endl;
-      std::cout << "Is connected: " << (bt_keyboard.is_connected() ? "YES" : "NO") << std::endl;
 #endif
     }
   }
