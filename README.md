@@ -4,7 +4,7 @@
 
 - Now using `ESP-IDF V5.4` for development. 
 - Now using C++20
-- Partial support of CMake Presets (compiling using VSCode CMake extensions instead of idf.py).
+- Partial support of CMake Presets (compiling using VSCode CMake extensions instead of idf.py). `idf.py` is still used for flashing and monitoring.
 - For the `setup()` method, added handler pointers when connection completed and connection lost.
 - The `BTKeyboard` class is now located in the `components` folder.
 - Added `show_bonded_devices()` and `remove_all_bonded_devices()` methods. Useful for debugging.
@@ -22,9 +22,9 @@ Please look at the `main/main.cpp` file on how to use the class. Only one instan
 
 The class named BTKeyboard waits for a keyboard to be available for pairing through the `BTKeyboard::devices_scan()` method (must be called by the application). It will then accumulate scan codes in a queue to be processed. The class methods available allow for:
 - Retrieval of the low-level key scan codes transmitted by the keyboard (`bool wait_for_low_event(BTKeyboard::KeyInfo & inf)` method)
-- Retrieval of the ASCII characters augmented with function keys values (`char wait_for_ascii_char()` or `char get_ascii_char()` methods)
+- Retrieval of the ASCII characters augmented with function keys values (`char wait_for_ascii_char()` or `char get_ascii_char()` methods). 
 
-The following list the character values returned (support of other keyboard keys may be added in a future release):
+The following table lists the character values returned (support of other keyboard keys may be added in a future release) through the `wait_for_ascii_char()` and `get_ascii_char()` methods:
 
 | Values      | Description      |
 |:-----------:|------------------|

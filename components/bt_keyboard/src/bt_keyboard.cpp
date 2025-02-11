@@ -381,22 +381,11 @@ bool BTKeyboard::setup(PairingHandler *pairing_handler,
   esp_bt_io_cap_t iocap        = ESP_BT_IO_CAP_IO;
   esp_bt_gap_set_security_param(param_type, &iocap, sizeof(uint8_t));
 
-  /*
-   * Set default parameters for Legacy Pairing
-   * Use fixed pin code
-   */
+  // Set default parameters for Legacy Pairing
+  // Use variable pin, input pin code when pairing
   esp_bt_pin_type_t pin_type = ESP_BT_PIN_TYPE_FIXED;
   esp_bt_pin_code_t pin_code;
-  pin_code[0] = '1';
-  pin_code[1] = '2';
-  pin_code[2] = '3';
-  pin_code[3] = '4';
-  pin_code[4] = '5';
-  pin_code[5] = '6';
-  pin_code[6] = '7';
-  pin_code[7] = '8';
-  pin_code[8] = 0;
-  esp_bt_gap_set_pin(pin_type, 8, pin_code);
+  esp_bt_gap_set_pin(pin_type, 0, pin_code);
 
   if ((ret = esp_bt_gap_register_callback(bt_gap_event_handler))) {
     ESP_LOGE(TAG, "esp_bt_gap_register_callback failed: %d", ret);
@@ -537,6 +526,27 @@ void BTKeyboard::handle_bt_device_result(esp_bt_gap_cb_param_t *param) {
   }
 }
 
+/**
+ * @brief Bluetooth GAP event handler callback function
+ *
+ * Handles various Bluetooth GAP (Generic Access Profile) events including:
+ * - Discovery state changes
+ * - Device discovery results
+ * - Pairing/Authentication events (PIN requests, passkey notifications)
+ * - Mode changes
+ *
+ * @param event The GAP event type that occurred
+ * @param param Pointer to structure containing event-specific parameters
+ *
+ * Events handled:
+ * - ESP_BT_GAP_DISC_STATE_CHANGED_EVT: Discovery started/stopped
+ * - ESP_BT_GAP_DISC_RES_EVT: Device discovery result
+ * - ESP_BT_GAP_KEY_NOTIF_EVT: Passkey notification
+ * - ESP_BT_GAP_CFM_REQ_EVT: Confirmation request
+ * - ESP_BT_GAP_KEY_REQ_EVT: Passkey request
+ * - ESP_BT_GAP_MODE_CHG_EVT: Mode change
+ * - ESP_BT_GAP_PIN_REQ_EVT: PIN code request
+ */
 void BTKeyboard::bt_gap_event_handler(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param) {
   switch (event) {
   case ESP_BT_GAP_DISC_STATE_CHANGED_EVT: {
@@ -637,14 +647,28 @@ void BTKeyboard::handle_ble_device_result(esp_ble_gap_cb_param_t *param) {
   }
   std::cout << std::endl;
 
-#if SCAN
   if (uuid == ESP_GATT_UUID_HID_SVC) {
     add_ble_scan_result(param->scan_rst.bda, param->scan_rst.ble_addr_type, appearance, adv_name,
                         adv_name_len, param->scan_rst.rssi);
   }
-#endif
 }
 
+/**
+ * @brief Handles BLE GAP (Generic Access Profile) events
+ *
+ * This callback function processes various BLE GAP events including:
+ * - Scanning related events (param set, results, stop)
+ * - Advertisement events (data set, start)
+ * - Authentication events (completion, key exchange, passkey handling)
+ *
+ * For authentication, it handles different IO capability scenarios:
+ * - ESP_IO_CAP_OUT: Displays passkey to user
+ * - ESP_IO_CAP_IO: Handles numeric comparison
+ * - ESP_IO_CAP_IN: Handles passkey input
+ *
+ * @param event The GAP event type being processed
+ * @param param Parameters associated with the event
+ */
 void BTKeyboard::ble_gap_event_handler(esp_gap_ble_cb_event_t event,
                                        esp_ble_gap_cb_param_t *param) {
   switch (event) {
@@ -736,6 +760,16 @@ void BTKeyboard::ble_gap_event_handler(esp_gap_ble_cb_event_t event,
   }
 }
 
+/**
+ * @brief Start Bluetooth device discovery/scanning
+ *
+ * Initiates a Bluetooth scan for nearby devices using general inquiry mode.
+ * The scan duration is calculated by dividing the seconds parameter by 1.28
+ * to convert to Bluetooth time units.
+ *
+ * @param seconds The duration of the scan in seconds
+ * @return esp_err_t ESP_OK on success, or an error code if starting discovery fails
+ */
 esp_err_t BTKeyboard::start_bt_scan(uint32_t seconds) {
   esp_err_t ret = ESP_OK;
   if ((ret = esp_bt_gap_start_discovery(ESP_BT_INQ_MODE_GENERAL_INQUIRY, (int)(seconds / 1.28),
@@ -746,15 +780,26 @@ esp_err_t BTKeyboard::start_bt_scan(uint32_t seconds) {
   return ret;
 }
 
+static esp_ble_scan_params_t hid_scan_params = {
+    .scan_type          = BLE_SCAN_TYPE_ACTIVE,
+    .own_addr_type      = BLE_ADDR_TYPE_PUBLIC,
+    .scan_filter_policy = BLE_SCAN_FILTER_ALLOW_ALL,
+    .scan_interval      = 0x50,
+    .scan_window        = 0x30,
+    .scan_duplicate     = BLE_SCAN_DUPLICATE_ENABLE,
+};
+
+/**
+ * @brief Start BLE scanning for HID devices
+ *
+ * This function initiates Bluetooth Low Energy scanning using the pre-configured HID scan
+ * parameters. It first sets the scan parameters and then starts the actual scanning process.
+ *
+ * @param seconds Duration of the scan in seconds. If set to 0, scanning continues indefinitely
+ * @return esp_err_t ESP_OK on success, or an error code if setting parameters or starting scan
+ * fails
+ */
 esp_err_t BTKeyboard::start_ble_scan(uint32_t seconds) {
-  static esp_ble_scan_params_t hid_scan_params = {
-      .scan_type          = BLE_SCAN_TYPE_ACTIVE,
-      .own_addr_type      = BLE_ADDR_TYPE_PUBLIC,
-      .scan_filter_policy = BLE_SCAN_FILTER_ALLOW_ALL,
-      .scan_interval      = 0x50,
-      .scan_window        = 0x30,
-      .scan_duplicate     = BLE_SCAN_DUPLICATE_ENABLE,
-  };
 
   esp_err_t ret = ESP_OK;
   if ((ret = esp_ble_gap_set_scan_params(&hid_scan_params)) != ESP_OK) {
@@ -770,6 +815,24 @@ esp_err_t BTKeyboard::start_ble_scan(uint32_t seconds) {
   return ret;
 }
 
+/**
+ * @brief Performs a scan for both Bluetooth Classic and BLE HID devices
+ *
+ * This method initiates concurrent scans for both Bluetooth Classic and BLE HID devices.
+ * It first checks if there are any pending scan results that need to be cleared.
+ * Then it initiates both BLE and BT Classic scans and waits for their completion.
+ * Finally, it combines the results from both scans into a single result list.
+ *
+ * @param seconds Duration of the scan in seconds
+ * @param num_results Pointer to store the total number of devices found
+ * @param results Reference to a ScanResult container to store the found devices
+ *
+ * @return ESP_OK if scan completed successfully
+ *         ESP_FAIL if there are pending results or if either scan fails to start
+ *
+ * @note The method will clear any previous scan results before starting a new scan
+ * @note Both BT Classic and BLE scan results are combined in the results container
+ */
 esp_err_t BTKeyboard::esp_hid_scan(uint32_t seconds, size_t *num_results, ScanResult &results) {
   if (num_bt_scan_results_ || !bt_scan_results_.empty() || num_ble_scan_results_ ||
       !ble_scan_results_.empty()) {
@@ -807,6 +870,22 @@ esp_err_t BTKeyboard::esp_hid_scan(uint32_t seconds, size_t *num_results, ScanRe
   return ESP_OK;
 }
 
+/**
+ * @brief Retrieves the list of bonded Bluetooth devices
+ *
+ * This method queries the ESP32 Bluetooth stack for all devices that have been
+ * previously bonded with this device. It returns both the list of devices and
+ * their count.
+ *
+ * @return A pair containing:
+ *         - A shared pointer to an array of esp_ble_bond_dev_t structures containing
+ *           the bonded devices information. nullptr if no devices or on error.
+ *         - An integer representing the number of bonded devices. 0 if no devices
+ *           or on error.
+ *
+ * @note The caller does not need to free the returned pointer as it is managed by
+ *       the shared_ptr.
+ */
 auto BTKeyboard::retrieve_bonded_devices()
     -> std::pair<std::shared_ptr<esp_ble_bond_dev_t[]>, int> {
   int bonded_devices_count = esp_ble_get_bond_device_num();
@@ -828,6 +907,27 @@ auto BTKeyboard::retrieve_bonded_devices()
   return {bonded_devices, bonded_devices_count};
 }
 
+/**
+ * @brief Scan for HID devices and attempt to connect to the first keyboard found
+ *
+ * This method scans for both Bluetooth Classic and BLE HID devices. For each device found,
+ * it displays detailed information including:
+ * - Transport type (BLE or BT Classic)
+ * - Device address
+ * - RSSI signal strength
+ * - HID usage type
+ * - For BLE: appearance value and address type
+ * - For BT Classic: Class of Device (COD) information
+ * - Device name (if available)
+ *
+ * The scan will automatically connect to the first device that matches either:
+ * - For BLE: Has an appearance value matching ESP_BLE_APPEARANCE_HID_KEYBOARD
+ * - For BT Classic: Has major class PERIPHERAL (5) and minor class includes keyboard
+ *
+ * @param seconds_wait_time Duration of the scan in seconds
+ *
+ * @note The method will return immediately if the keyboard is already connected
+ */
 void BTKeyboard::devices_scan(int seconds_wait_time) {
 
   if (connected_) return;
@@ -887,6 +987,23 @@ void BTKeyboard::devices_scan(int seconds_wait_time) {
   }
 }
 
+/**
+ * @brief Bluetooth HID Host callback function to handle various HID events
+ *
+ * This callback handles the following events:
+ * - ESP_HIDH_OPEN_EVENT: Device connection opened
+ * - ESP_HIDH_BATTERY_EVENT: Battery level updates
+ * - ESP_HIDH_INPUT_EVENT: Input reports from device
+ * - ESP_HIDH_FEATURE_EVENT: Feature reports from device
+ * - ESP_HIDH_CLOSE_EVENT: Device connection closed
+ *
+ * For each event, it logs relevant information and updates the BTKeyboard state accordingly.
+ *
+ * @param handler_args Pointer to handler-specific arguments
+ * @param base Event base (unused)
+ * @param id Event ID (esp_hidh_event_t)
+ * @param event_data Pointer to event-specific data
+ */
 void BTKeyboard::hidh_callback(void *handler_args, esp_event_base_t base, int32_t id,
                                void *event_data) {
   esp_hidh_event_t event       = (esp_hidh_event_t)id;
@@ -952,6 +1069,19 @@ void BTKeyboard::hidh_callback(void *handler_args, esp_event_base_t base, int32_
   }
 }
 
+/**
+ * @brief Pushes keyboard event data to the event queue
+ *
+ * This method takes raw keyboard event data and enqueues it for processing.
+ * If the input size exceeds MAX_KEY_DATA_SIZE, it will be truncated and a
+ * warning message will be logged.
+ *
+ * @param keys Pointer to array containing keyboard event data
+ * @param size Size of the keyboard event data in bytes
+ *
+ * @note The data is copied into a KeyInfo struct before being enqueued
+ * @note No blocking occurs if queue is full (timeout = 0)
+ */
 void BTKeyboard::push_key(uint8_t *keys, uint8_t size) {
   KeyInfo inf;
   if (size > MAX_KEY_DATA_SIZE) {
@@ -966,6 +1096,27 @@ void BTKeyboard::push_key(uint8_t *keys, uint8_t size) {
   xQueueSendToBack(event_queue_, &inf, 0);
 }
 
+/**
+ * @brief Waits for and processes keyboard input to return an ASCII character.
+ *
+ * This method handles keyboard input processing including:
+ * - Key repeat functionality
+ * - Modifier keys (Shift, Ctrl)
+ * - Caps Lock toggle
+ * - Character translation using shift translation dictionary
+ *
+ * @param forever If true, waits indefinitely for input. If false, returns immediately if no input
+ *                is available and last character was 0, otherwise waits for repeat period.
+ *
+ * @return ASCII character based on the keyboard input and current modifier state.
+ *         Returns:
+ *         - Control characters (1-26) when Ctrl is pressed with letters
+ *         - Shifted or unshifted characters based on Shift and Caps Lock states
+ *         - Last character on key repeat
+ *         - 0 if no valid character could be generated
+ *
+ * @note The method manages internal repeat timing and caps lock state.
+ */
 char BTKeyboard::wait_for_ascii_char(bool forever) {
   KeyInfo inf;
 
@@ -1021,44 +1172,54 @@ char BTKeyboard::wait_for_ascii_char(bool forever) {
   }
 }
 
+/**
+ * @brief Display information about all Bluetooth devices currently bonded with this keyboard
+ *
+ * This method retrieves and prints the list of all bonded Bluetooth devices to the log.
+ * For each device, it shows:
+ * - Device index
+ * - Address type
+ * - Device MAC address
+ *
+ * If no devices are bonded, it logs a message indicating this.
+ *
+ * The logging is done using ESP-IDF's logging facility at INFO level.
+ */
 void BTKeyboard::show_bonded_devices(void) {
-  int dev_num = esp_ble_get_bond_device_num();
-  if (dev_num == 0) {
-    ESP_LOGI(TAG, "Bonded devices number zero\n");
+  auto [dev_list, dev_count] = retrieve_bonded_devices();
+
+  if (dev_count == 0) {
+    ESP_LOGI(TAG, "There is no bonded device.\n");
     return;
   }
 
-  auto dev_list = std::make_unique<esp_ble_bond_dev_t[]>(dev_num);
-
-  if (!dev_list) {
-    ESP_LOGI(TAG, "memory allocation failed, return\n");
-    return;
-  }
-
-  esp_ble_get_bond_device_list(&dev_num, dev_list.get());
-  ESP_LOGI(TAG, "Bonded devices number %d", dev_num);
-  for (int i = 0; i < dev_num; i++) {
+  ESP_LOGI(TAG, "Bonded devices count %d.", dev_count);
+  for (int i = 0; i < dev_count; i++) {
     ESP_LOGI(TAG, "[%u] addr_type %u, addr " ESP_BD_ADDR_STR, i, dev_list[i].bd_addr_type,
              ESP_BD_ADDR_HEX(dev_list[i].bd_addr));
   }
 }
 
+/**
+ * @brief Removes all bonded Bluetooth devices from the device's memory
+ *
+ * This method retrieves the list of currently bonded devices and removes them
+ * one by one. If no devices are bonded, a log message is displayed and the
+ * method returns without performing any removal.
+ *
+ * The removal process uses the ESP32's Bluetooth API to remove each device's
+ * bonding information from the persistent storage.
+ */
 void BTKeyboard::remove_all_bonded_devices() {
-  int dev_num = esp_ble_get_bond_device_num();
-  if (dev_num == 0) {
-    ESP_LOGI(TAG, "Bonded devices number zero\n");
+
+  auto [dev_list, dev_count] = retrieve_bonded_devices();
+
+  if (dev_count == 0) {
+    ESP_LOGI(TAG, "There is no bonded device.");
     return;
   }
 
-  auto dev_list = std::make_unique<esp_ble_bond_dev_t[]>(dev_num);
-
-  if (!dev_list) {
-    ESP_LOGI(TAG, "memory allocation failed, return\n");
-    return;
-  }
-
-  esp_ble_get_bond_device_list(&dev_num, dev_list.get());
-  for (int i = 0; i < dev_num; i++) {
+  for (int i = 0; i < dev_count; i++) {
     esp_ble_remove_bond_device(dev_list[i].bd_addr);
   }
 }
