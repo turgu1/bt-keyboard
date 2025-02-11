@@ -16,12 +16,14 @@ BTKeyboard bt_keyboard;
 
 void pairing_handler(uint32_t pid) {
   std::cout << "Please enter the following pairing code, " << std::endl
-            << "followed with ENTER on your keyboard: " << pid << std::endl;
+            << "followed with ENTER on your keyboard: " << std::dec << pid << std::endl;
 }
 
-void keyboard_lost_connection_handler() { ESP_LOGE(TAG, "Lost connection with keyboard"); }
+void keyboard_lost_connection_handler() {
+  ESP_LOGW(TAG, "====> Lost connection with keyboard <====");
+}
 
-void keyboard_connected_handler() { ESP_LOGE(TAG, "Connected to keyboard"); }
+void keyboard_connected_handler() { ESP_LOGI(TAG, "----> Connected to keyboard <----"); }
 
 extern "C" {
 
@@ -62,6 +64,7 @@ void app_main() {
         std::cout << std::hex << +inf.keys[n] << ", ";
       }
       std::cout << std::endl;
+      std::cout << "Is connected: " << (bt_keyboard.is_connected() ? "YES" : "NO") << std::endl;
 #endif
     }
   }

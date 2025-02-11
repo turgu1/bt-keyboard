@@ -37,6 +37,10 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 
+#include <forward_list>
+#include <memory>
+#include <string>
+
 class BTKeyboard {
 public:
   typedef void PairingHandler(uint32_t code);
@@ -68,9 +72,7 @@ public:
     KeyModifier modifier;
   };
 
-  BTKeyboard()
-      : bt_scan_results_(nullptr), ble_scan_results_(nullptr), num_bt_scan_results_(0),
-        num_ble_scan_results_(0), caps_lock_(false) {}
+  BTKeyboard() : num_bt_scan_results_(0), num_ble_scan_results_(0), caps_lock_(false) {}
 
   bool setup(PairingHandler *pairing_handler                = nullptr,
              GotConnectionHandler *got_connection_handler   = nullptr,
@@ -112,10 +114,8 @@ private:
   static SemaphoreHandle_t ble_hidh_cb_semaphore_;
 
   struct esp_hid_scan_result_t {
-    struct esp_hid_scan_result_t *next;
-
     esp_bd_addr_t bda;
-    const char *name;
+    std::string name;
     int8_t rssi;
     esp_hid_usage_t usage;
     esp_hid_transport_t transport; // BT, BLE or USB
@@ -132,8 +132,11 @@ private:
     };
   };
 
-  esp_hid_scan_result_t *bt_scan_results_;
-  esp_hid_scan_result_t *ble_scan_results_;
+  typedef std::forward_list<std::unique_ptr<esp_hid_scan_result_t>> ScanResult;
+
+  ScanResult bt_scan_results_;
+  ScanResult ble_scan_results_;
+
   size_t num_bt_scan_results_;
   size_t num_ble_scan_results_;
 
@@ -160,6 +163,8 @@ private:
   static void hidh_callback(void *handler_args, esp_event_base_t base, int32_t id,
                             void *event_data);
 
+  auto retrieve_bonded_devices() -> std::pair<std::shared_ptr<esp_ble_bond_dev_t[]>, int>;
+
   static void bt_gap_event_handler(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param);
   static void ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param);
 
@@ -171,8 +176,7 @@ private:
   void handle_bt_device_result(esp_bt_gap_cb_param_t *param);
   void handle_ble_device_result(esp_ble_gap_cb_param_t *scan_rst);
 
-  void esp_hid_scan_results_free(esp_hid_scan_result_t *results);
-  esp_hid_scan_result_t *find_scan_result(esp_bd_addr_t bda, esp_hid_scan_result_t *results);
+  esp_hid_scan_result_t *find_scan_result(esp_bd_addr_t bda, ScanResult &results);
 
   void add_bt_scan_result(esp_bd_addr_t bda, esp_bt_cod_t *cod, esp_bt_uuid_t *uuid, uint8_t *name,
                           uint8_t name_len, int rssi);
@@ -184,10 +188,10 @@ private:
 
   esp_err_t start_ble_scan(uint32_t seconds);
   esp_err_t start_bt_scan(uint32_t seconds);
-  esp_err_t esp_hid_scan(uint32_t seconds, size_t *num_results, esp_hid_scan_result_t **results);
+  esp_err_t esp_hid_scan(uint32_t seconds, size_t *num_results, ScanResult &results);
 
   inline void set_battery_level(uint8_t level) { battery_level_ = level; }
-  inline static void set_connected(bool connected) {
+  inline void set_connected(bool connected) {
     connected_ = connected;
     if (connected) {
       if (got_connection_handler_ != nullptr) {

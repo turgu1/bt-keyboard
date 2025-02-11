@@ -26,6 +26,8 @@
 #include <cstring>
 #include <iomanip>
 #include <iostream>
+#include <list>
+#include <memory>
 #include <ostream>
 
 #define SCAN 1
@@ -42,37 +44,61 @@ SemaphoreHandle_t BTKeyboard::bt_hidh_cb_semaphore_  = nullptr;
 SemaphoreHandle_t BTKeyboard::ble_hidh_cb_semaphore_ = nullptr;
 
 const char *BTKeyboard::gap_bt_prop_type_names_[] = {"", "BDNAME", "COD", "RSSI", "EIR"};
-const char *BTKeyboard::ble_gap_evt_names_[]      = {"ADV_DATA_SET_COMPLETE",
-                                                     "SCAN_RSP_DATA_SET_COMPLETE",
-                                                     "SCAN_PARAM_SET_COMPLETE",
-                                                     "SCAN_RESULT",
-                                                     "ADV_DATA_RAW_SET_COMPLETE",
-                                                     "SCAN_RSP_DATA_RAW_SET_COMPLETE",
-                                                     "ADV_START_COMPLETE",
-                                                     "SCAN_START_COMPLETE",
-                                                     "AUTH_CMPL",
-                                                     "KEY",
-                                                     "SEC_REQ",
-                                                     "PASSKEY_NOTIF",
-                                                     "PASSKEY_REQ",
-                                                     "OOB_REQ",
-                                                     "LOCAL_IR",
-                                                     "LOCAL_ER",
-                                                     "NC_REQ",
-                                                     "ADV_STOP_COMPLETE",
-                                                     "SCAN_STOP_COMPLETE",
-                                                     "SET_STATIC_RAND_ADDR",
-                                                     "UPDATE_CONN_PARAMS",
-                                                     "SET_PKT_LENGTH_COMPLETE",
-                                                     "SET_LOCAL_PRIVACY_COMPLETE",
-                                                     "REMOVE_BOND_DEV_COMPLETE",
-                                                     "CLEAR_BOND_DEV_COMPLETE",
-                                                     "GET_BOND_DEV_COMPLETE",
-                                                     "READ_RSSI_COMPLETE",
-                                                     "UPDATE_WHITELIST_COMPLETE"};
-const char *BTKeyboard::bt_gap_evt_names_[]       = {
-    "DISC_RES", "DISC_STATE_CHANGED", "RMT_SRVCS", "RMT_SRVC_REC",   "AUTH_CMPL", "PIN_REQ",
-    "CFM_REQ",  "KEY_NOTIF",          "KEY_REQ",   "READ_RSSI_DELTA"};
+
+const char *BTKeyboard::ble_gap_evt_names_[] = {"ADV_DATA_SET_COMPLETE",
+                                                "SCAN_RSP_DATA_SET_COMPLETE",
+                                                "SCAN_PARAM_SET_COMPLETE",
+                                                "SCAN_RESULT",
+                                                "ADV_DATA_RAW_SET_COMPLETE",
+                                                "SCAN_RSP_DATA_RAW_SET_COMPLETE",
+                                                "ADV_START_COMPLETE",
+                                                "SCAN_START_COMPLETE",
+                                                "AUTH_CMPL",
+                                                "KEY",
+                                                "SEC_REQ",
+                                                "PASSKEY_NOTIF",
+                                                "PASSKEY_REQ",
+                                                "OOB_REQ",
+                                                "LOCAL_IR",
+                                                "LOCAL_ER",
+                                                "NC_REQ",
+                                                "ADV_STOP_COMPLETE",
+                                                "SCAN_STOP_COMPLETE",
+                                                "SET_STATIC_RAND_ADDR",
+                                                "UPDATE_CONN_PARAMS",
+                                                "SET_PKT_LENGTH_COMPLETE",
+                                                "SET_LOCAL_PRIVACY_COMPLETE",
+                                                "REMOVE_BOND_DEV_COMPLETE",
+                                                "CLEAR_BOND_DEV_COMPLETE",
+                                                "GET_BOND_DEV_COMPLETE",
+                                                "READ_RSSI_COMPLETE",
+                                                "UPDATE_WHITELIST_COMPLETE"};
+
+const char *BTKeyboard::bt_gap_evt_names_[] = {"DISC_RES",
+                                               "DISC_STATE_CHANGED",
+                                               "RMT_SRVCS",
+                                               "RMT_SRVC_REC",
+                                               "AUTH_CMPL",
+                                               "PIN_REQ",
+                                               "CFM_REQ",
+                                               "KEY_NOTIF",
+                                               "KEY_REQ",
+                                               "READ_RSSI_DELTA",
+                                               "CONFIG_EIR_DATA",
+                                               "SET_AFH_CHANNELS",
+                                               "READ_REMOTE_NAME",
+                                               "MODE_CHG",
+                                               "REMOVE_BOND_DEV_COMPLETE",
+                                               "QOS_CMPL",
+                                               "ACL_CONN_CMPL_STAT",
+                                               "ACL_DISCONN_CMPL_STAT",
+                                               "SET_PAGE_TO",
+                                               "GET_PAGE_TO",
+                                               "ACL_PKT_TYPE_CHANGED",
+                                               "ENC_CHG_EVT",
+                                               "SET_MIN_ENC_KEY_SIZE",
+                                               "GET_DEV_NAME_CMPL"};
+
 const char *BTKeyboard::ble_addr_type_names_[] = {"PUBLIC", "RANDOM", "RPA_PUBLIC", "RPA_RANDOM"};
 
 const char BTKeyboard::shift_trans_dict_[] =
@@ -198,26 +224,12 @@ const char *BTKeyboard::ble_key_type_str(esp_ble_key_type_t key_type) {
   return key_str;
 }
 
-void BTKeyboard::esp_hid_scan_results_free(esp_hid_scan_result_t *results) {
-  esp_hid_scan_result_t *r = nullptr;
-  while (results) {
-    r       = results;
-    results = results->next;
-    if (r->name != nullptr) {
-      free((char *)r->name);
-    }
-    free(r);
-  }
-}
-
 BTKeyboard::esp_hid_scan_result_t *BTKeyboard::find_scan_result(esp_bd_addr_t bda,
-                                                                esp_hid_scan_result_t *results) {
-  esp_hid_scan_result_t *r = results;
-  while (r) {
-    if (memcmp(bda, r->bda, sizeof(esp_bd_addr_t)) == 0) {
-      return r;
+                                                                ScanResult &results) {
+  for (auto &res : results) {
+    if (memcmp(bda, res->bda, sizeof(esp_bd_addr_t)) == 0) {
+      return res.get();
     }
-    r = r->next;
   }
   return nullptr;
 }
@@ -227,15 +239,8 @@ void BTKeyboard::add_bt_scan_result(esp_bd_addr_t bda, esp_bt_cod_t *cod, esp_bt
   esp_hid_scan_result_t *r = find_scan_result(bda, bt_scan_results_);
   if (r) {
     // Some info may come later
-    if (r->name == nullptr && name && name_len) {
-      char *name_s = (char *)malloc(name_len + 1);
-      if (name_s == nullptr) {
-        ESP_LOGE(TAG, "Malloc result name failed!");
-        return;
-      }
-      memcpy(name_s, name, name_len);
-      name_s[name_len] = 0;
-      r->name          = (const char *)name_s;
+    if (r->name.empty() && name && name_len) {
+      r->name.assign(reinterpret_cast<const char *>(name), name_len);
     }
     if (r->bt.uuid.len == 0 && uuid->len) {
       memcpy(&r->bt.uuid, uuid, sizeof(esp_bt_uuid_t));
@@ -246,36 +251,29 @@ void BTKeyboard::add_bt_scan_result(esp_bd_addr_t bda, esp_bt_cod_t *cod, esp_bt
     return;
   }
 
-  r = (esp_hid_scan_result_t *)malloc(sizeof(esp_hid_scan_result_t));
+  auto res = std::make_unique<esp_hid_scan_result_t>();
 
-  if (r == nullptr) {
-    ESP_LOGE(TAG, "Malloc bt_hidh_scan_result_t failed!");
+  if (res == nullptr) {
+    ESP_LOGE(TAG, "make_unique of bt_hidh_scan_result_t failed!");
     return;
   }
 
   r->transport = ESP_HID_TRANSPORT_BT;
 
-  memcpy(r->bda, bda, sizeof(esp_bd_addr_t));
-  memcpy(&r->bt.cod, cod, sizeof(esp_bt_cod_t));
-  memcpy(&r->bt.uuid, uuid, sizeof(esp_bt_uuid_t));
+  memcpy(res->bda, bda, sizeof(esp_bd_addr_t));
+  memcpy(&res->bt.cod, cod, sizeof(esp_bt_cod_t));
+  memcpy(&res->bt.uuid, uuid, sizeof(esp_bt_uuid_t));
 
-  r->usage = esp_hid_usage_from_cod((uint32_t)cod);
-  r->rssi  = rssi;
-  r->name  = nullptr;
+  res->usage = esp_hid_usage_from_cod((uint32_t)cod);
+  res->rssi  = rssi;
+  res->name.clear();
 
   if (name_len && name) {
-    char *name_s = (char *)malloc(name_len + 1);
-    if (name_s == nullptr) {
-      free(r);
-      ESP_LOGE(TAG, "Malloc result name failed!");
-      return;
-    }
-    memcpy(name_s, name, name_len);
-    name_s[name_len] = 0;
-    r->name          = (const char *)name_s;
+    res->name.assign(reinterpret_cast<const char *>(name), name_len);
   }
-  r->next          = bt_scan_results_;
-  bt_scan_results_ = r;
+
+  bt_scan_results_.push_front(std::move(res));
+
   num_bt_scan_results_++;
 }
 
@@ -287,10 +285,10 @@ void BTKeyboard::add_ble_scan_result(esp_bd_addr_t bda, esp_ble_addr_type_t addr
     return;
   }
 
-  esp_hid_scan_result_t *r = (esp_hid_scan_result_t *)malloc(sizeof(esp_hid_scan_result_t));
+  auto r = std::make_unique<esp_hid_scan_result_t>();
 
   if (r == nullptr) {
-    ESP_LOGE(TAG, "Malloc ble_hidh_scan_result_t failed!");
+    ESP_LOGE(TAG, "make_unique of ble_hidh_scan_result_t failed!");
     return;
   }
 
@@ -302,22 +300,13 @@ void BTKeyboard::add_ble_scan_result(esp_bd_addr_t bda, esp_ble_addr_type_t addr
   r->ble.addr_type  = addr_type;
   r->usage          = esp_hid_usage_from_appearance(appearance);
   r->rssi           = rssi;
-  r->name           = nullptr;
+  r->name.clear();
 
   if (name_len && name) {
-    char *name_s = (char *)malloc(name_len + 1);
-    if (name_s == nullptr) {
-      free(r);
-      ESP_LOGE(TAG, "Malloc result name failed!");
-      return;
-    }
-    memcpy(name_s, name, name_len);
-    name_s[name_len] = 0;
-    r->name          = (const char *)name_s;
+    r->name.assign(reinterpret_cast<const char *>(name), name_len);
   }
 
-  r->next           = ble_scan_results_;
-  ble_scan_results_ = r;
+  ble_scan_results_.push_front(std::move(r));
   num_ble_scan_results_++;
 }
 
@@ -336,6 +325,7 @@ bool BTKeyboard::setup(PairingHandler *pairing_handler,
   bt_keyboard_ = this;
 
   pairing_handler_         = pairing_handler;
+  got_connection_handler_  = got_connection_handler;
   lost_connection_handler_ = lost_connection_handler;
 
   event_queue_ = xQueueCreate(10, sizeof(KeyInfo));
@@ -428,10 +418,7 @@ bool BTKeyboard::setup(PairingHandler *pairing_handler,
 
   ESP_ERROR_CHECK(esp_ble_gattc_register_callback(esp_hidh_gattc_event_handler));
   esp_hidh_config_t config = {
-      .callback         = hidh_callback,
-      .event_stack_size = 4 * 1024, // Required with ESP-IDF 4.4
-      .callback_arg     = nullptr   // idem
-  };
+      .callback = hidh_callback, .event_stack_size = 4 * 1024, .callback_arg = nullptr};
   ESP_ERROR_CHECK(esp_hidh_init(&config));
 
   for (int i = 0; i < MAX_KEY_DATA_SIZE; i++) {
@@ -542,7 +529,7 @@ void BTKeyboard::handle_bt_device_result(esp_bt_gap_cb_param_t *param) {
       }
     }
   }
-  std::cout << std::endl;
+  std::cout << std::dec << std::endl;
 
   if ((cod->major == ESP_BT_COD_MAJOR_DEV_PERIPHERAL) ||
       (find_scan_result(param->disc_res.bda, bt_scan_results_) != nullptr)) {
@@ -565,7 +552,7 @@ void BTKeyboard::bt_gap_event_handler(esp_bt_gap_cb_event_t event, esp_bt_gap_cb
     break;
   }
   case ESP_BT_GAP_KEY_NOTIF_EVT:
-    ESP_LOGI(TAG, "BT GAP KEY_NOTIF passkey:%ld", param->key_notif.passkey);
+    ESP_LOGI(TAG, "BT GAP KEY_NOTIF passkey: %ld", param->key_notif.passkey);
     if (pairing_handler_ != nullptr) (*pairing_handler_)(param->key_notif.passkey);
     break;
   case ESP_BT_GAP_CFM_REQ_EVT: {
@@ -783,9 +770,9 @@ esp_err_t BTKeyboard::start_ble_scan(uint32_t seconds) {
   return ret;
 }
 
-esp_err_t BTKeyboard::esp_hid_scan(uint32_t seconds, size_t *num_results,
-                                   esp_hid_scan_result_t **results) {
-  if (num_bt_scan_results_ || bt_scan_results_ || num_ble_scan_results_ || ble_scan_results_) {
+esp_err_t BTKeyboard::esp_hid_scan(uint32_t seconds, size_t *num_results, ScanResult &results) {
+  if (num_bt_scan_results_ || !bt_scan_results_.empty() || num_ble_scan_results_ ||
+      !ble_scan_results_.empty()) {
     ESP_LOGE(TAG, "There are old scan results. Free them first!");
     return ESP_FAIL;
   }
@@ -803,73 +790,100 @@ esp_err_t BTKeyboard::esp_hid_scan(uint32_t seconds, size_t *num_results,
   }
 
   *num_results = num_bt_scan_results_ + num_ble_scan_results_;
-  *results     = bt_scan_results_;
 
-  if (num_bt_scan_results_) {
-    while (bt_scan_results_->next != nullptr) {
-      bt_scan_results_ = bt_scan_results_->next;
-    }
-    bt_scan_results_->next = ble_scan_results_;
-  } else {
-    *results = ble_scan_results_;
+  for (auto &r : bt_scan_results_) {
+    results.push_front(std::move(r));
+  }
+  for (auto &r : ble_scan_results_) {
+    results.push_front(std::move(r));
   }
 
-  num_bt_scan_results_  = 0;
-  bt_scan_results_      = nullptr;
+  num_bt_scan_results_ = 0;
+  bt_scan_results_.clear();
+
   num_ble_scan_results_ = 0;
-  ble_scan_results_     = nullptr;
+  ble_scan_results_.clear();
 
   return ESP_OK;
+}
+
+auto BTKeyboard::retrieve_bonded_devices()
+    -> std::pair<std::shared_ptr<esp_ble_bond_dev_t[]>, int> {
+  int bonded_devices_count = esp_ble_get_bond_device_num();
+  ESP_LOGD(TAG, "Number of bonded devices: %d", bonded_devices_count);
+
+  if (bonded_devices_count == 0) {
+    ESP_LOGD(TAG, "No bonded devices");
+    return {nullptr, 0};
+  }
+
+  auto bonded_devices = std::make_shared<esp_ble_bond_dev_t[]>(bonded_devices_count);
+
+  if ((esp_ble_get_bond_device_list((int *)&bonded_devices_count, bonded_devices.get())) !=
+      ESP_OK) {
+    ESP_LOGE(TAG, "esp_ble_get_bond_device_list failed");
+    return {nullptr, 0};
+  }
+
+  return {bonded_devices, bonded_devices_count};
 }
 
 void BTKeyboard::devices_scan(int seconds_wait_time) {
 
   if (connected_) return;
 
-  size_t results_len             = 0;
-  esp_hid_scan_result_t *results = nullptr;
+  size_t results_len = 0;
+  ScanResult results;
   ESP_LOGI(TAG, "SCAN...");
 
   // start scan for HID devices
 
-  esp_hid_scan(seconds_wait_time, &results_len, &results);
+  esp_hid_scan(seconds_wait_time, &results_len, results);
   ESP_LOGI(TAG, "SCAN: %u results", results_len);
 
   if (results_len) {
-    esp_hid_scan_result_t *r  = results;
     esp_hid_scan_result_t *cr = nullptr;
-    while (r) {
+    for (auto &r : results) {
       uint16_t appearance = r->ble.appearance;
       std::cout << "  " << (r->transport == ESP_HID_TRANSPORT_BLE ? "BLE: " : "BT: ") << r->bda
                 << std::dec << ", RSSI: " << +r->rssi << ", USAGE: " << esp_hid_usage_str(r->usage);
       if (r->transport == ESP_HID_TRANSPORT_BLE) {
-        cr = r;
         std::cout << ", APPEARANCE: 0x" << std::hex << std::setw(4) << std::setfill('0')
                   << appearance << ", ADDR_TYPE: '" << ble_addr_type_str(r->ble.addr_type) << "'";
+        if (appearance == ESP_BLE_APPEARANCE_HID_KEYBOARD) {
+          cr = r.get();
+        }
       }
       if (r->transport == ESP_HID_TRANSPORT_BT) {
-        cr = r;
         std::cout << ", COD: " << esp_hid_cod_major_str(r->bt.cod.major) << "[";
         esp_hid_cod_minor_print(r->bt.cod.minor, stdout);
         std::cout << "] srv 0x" << std::hex << std::setw(3) << std::setfill('0')
                   << r->bt.cod.service << ", " << r->bt.uuid;
+
+        if ((r->bt.cod.major == 5 /* PERIPHERAL */) &&
+            (r->bt.cod.minor & ESP_HID_COD_MIN_KEYBOARD)) {
+          cr = r.get();
+        }
       }
 
-      if (r->name) {
+      std::cout << std::dec;
+
+      if (!r->name.empty()) {
         std::cout << ", NAME: " << r->name << std::endl;
       } else {
         std::cout << std::endl;
       }
-      r = r->next;
+
+      if (cr) break;
     }
 
-    // if (cr) {
-    //   // open the last result
-    //   esp_hidh_dev_open(cr->bda, cr->transport, cr->ble.addr_type);
-    // }
+    if (cr) {
+      // open the selected entry
+      esp_hidh_dev_open(cr->bda, cr->transport, cr->ble.addr_type);
+    }
 
     // free the results
-    esp_hid_scan_results_free(results);
+    results.clear();
   }
 }
 
@@ -886,11 +900,11 @@ void BTKeyboard::hidh_callback(void *handler_args, esp_event_base_t base, int32_
         ESP_LOGI(TAG, ESP_BD_ADDR_STR " OPEN: %s", ESP_BD_ADDR_HEX(bda),
                  esp_hidh_dev_name_get(param->open.dev));
         esp_hidh_dev_dump(param->open.dev, stdout);
-        set_connected(true);
+        bt_keyboard_->set_connected(true);
       }
     } else {
       ESP_LOGE(TAG, " OPEN failed!");
-      set_connected(false);
+      bt_keyboard_->set_connected(false);
     }
     break;
   }
@@ -928,7 +942,7 @@ void BTKeyboard::hidh_callback(void *handler_args, esp_event_base_t base, int32_
     if (bda) {
       ESP_LOGI(TAG, ESP_BD_ADDR_STR " CLOSE: %s", ESP_BD_ADDR_HEX(bda),
                esp_hidh_dev_name_get(param->close.dev));
-      set_connected(false);
+      bt_keyboard_->set_connected(false);
     }
     break;
   }
@@ -1014,19 +1028,19 @@ void BTKeyboard::show_bonded_devices(void) {
     return;
   }
 
-  esp_ble_bond_dev_t *dev_list = (esp_ble_bond_dev_t *)malloc(sizeof(esp_ble_bond_dev_t) * dev_num);
+  auto dev_list = std::make_unique<esp_ble_bond_dev_t[]>(dev_num);
+
   if (!dev_list) {
-    ESP_LOGI(TAG, "malloc failed, return\n");
+    ESP_LOGI(TAG, "memory allocation failed, return\n");
     return;
   }
-  esp_ble_get_bond_device_list(&dev_num, dev_list);
+
+  esp_ble_get_bond_device_list(&dev_num, dev_list.get());
   ESP_LOGI(TAG, "Bonded devices number %d", dev_num);
   for (int i = 0; i < dev_num; i++) {
-    ESP_LOGI(TAG, "[%u] addr_type %u, addr " ESP_BD_ADDR_STR "", i, dev_list[i].bd_addr_type,
+    ESP_LOGI(TAG, "[%u] addr_type %u, addr " ESP_BD_ADDR_STR, i, dev_list[i].bd_addr_type,
              ESP_BD_ADDR_HEX(dev_list[i].bd_addr));
   }
-
-  free(dev_list);
 }
 
 void BTKeyboard::remove_all_bonded_devices() {
@@ -1036,15 +1050,15 @@ void BTKeyboard::remove_all_bonded_devices() {
     return;
   }
 
-  esp_ble_bond_dev_t *dev_list = (esp_ble_bond_dev_t *)malloc(sizeof(esp_ble_bond_dev_t) * dev_num);
+  auto dev_list = std::make_unique<esp_ble_bond_dev_t[]>(dev_num);
+
   if (!dev_list) {
-    ESP_LOGI(TAG, "malloc failed, return\n");
+    ESP_LOGI(TAG, "memory allocation failed, return\n");
     return;
   }
-  esp_ble_get_bond_device_list(&dev_num, dev_list);
+
+  esp_ble_get_bond_device_list(&dev_num, dev_list.get());
   for (int i = 0; i < dev_num; i++) {
     esp_ble_remove_bond_device(dev_list[i].bd_addr);
   }
-
-  free(dev_list);
 }
