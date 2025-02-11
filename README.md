@@ -1,6 +1,6 @@
 # ESP32 ESP-IDF Bluetooth Keyboard Input Demo For Receiving And Processing Keyboard Inputs
 
-(Updated 2025-02-10)
+(Updated 2025-02-11)
 
 - Now using `ESP-IDF V5.4` for development. 
 - Now using C++20
