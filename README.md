@@ -78,14 +78,15 @@ git pull
 git submodule update --init --recursive
 ```
 
-Some work remains to be done:
+### Some work that remains to be done:
 
 - [x] Add pairing code retrieval by the application.
 - [x] CapsLock management
 - [ ] Synchronize the code with the `esp_hid_host` example of ESP-IDF
 - [ ] Some more key mapping
+- [ ] Re-introduce conditional compilation for BT and BLE
 - [x] Isolate the class into an ESP-IDF Component
 
-Issue:
+### Issue:
 
-- BLE Keyboard's connexion (`MX Keys Mini`) recovering doesn't seem to work. Still investigating.
+- BLE Keyboard's connection (`MX Keys Mini`) recovering doesn't seem to work. Still investigating.

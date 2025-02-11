@@ -4,6 +4,9 @@ file(GLOB_RECURSE app_sources ${CMAKE_SOURCE_DIR}/main/*.*)
 set(include_dirs ${CMAKE_SOURCE_DIR}/include)
 
 set(CMAKE_CXX_STANDARD "20")
+
+set(IDF_TARGET "esp32")
+
 set(SDKCONFIG ${CMAKE_SOURCE_DIR}/build/sdkconfig)
 
 idf_component_register(SRCS "main.cpp" "${app_sources}"

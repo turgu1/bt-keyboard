@@ -22,6 +22,10 @@
 
 #pragma once
 
+#include <forward_list>
+#include <memory>
+#include <string>
+
 #include "esp_bt.h"
 #include "esp_bt_defs.h"
 #include "esp_bt_main.h"
@@ -37,10 +41,38 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 
-#include <forward_list>
-#include <memory>
-#include <string>
+std::ostream &operator<<(std::ostream &os, const esp_bd_addr_t &addr);
+std::ostream &operator<<(std::ostream &os, const esp_bt_uuid_t &uuid);
 
+/**
+ * @brief Bluetooth Keyboard class for handling HID keyboard devices
+ *
+ * This class provides functionality to connect and interact with Bluetooth HID keyboard devices.
+ * It supports both classic Bluetooth and BLE (Bluetooth Low Energy) connections.
+ *
+ * Features:
+ * - Device scanning and connection
+ * - Key event handling
+ * - Pairing management
+ * - Battery level monitoring
+ * - Connection state tracking
+ * - ASCII character input support
+ *
+ * @note The class uses ESP32's Bluetooth stack and requires appropriate configs to be enabled
+ *
+ * Key components:
+ * - Key modifiers handling (Ctrl, Shift, Alt, Meta)
+ * - Callback support for pairing and connection events
+ * - Queue-based event system for key inputs
+ * - Support for both BT and BLE scan results
+ *
+ * Configuration dependent features:
+ * - CONFIG_BT_HID_HOST_ENABLED: Classic Bluetooth HID support
+ * - CONFIG_BT_BLE_ENABLED: BLE HID support
+ *
+ * @see KeyModifier for supported modifier keys
+ * @see KeyInfo for key event data structure
+ */
 class BTKeyboard {
 public:
   typedef void PairingHandler(uint32_t code);
@@ -67,31 +99,31 @@ public:
 
   static const uint8_t MAX_KEY_DATA_SIZE = 20;
   struct KeyInfo {
-    uint8_t size;
-    uint8_t keys[MAX_KEY_DATA_SIZE];
+    uint8_t     size;
+    uint8_t     keys[MAX_KEY_DATA_SIZE];
     KeyModifier modifier;
   };
 
   BTKeyboard() : num_bt_scan_results_(0), num_ble_scan_results_(0), caps_lock_(false) {}
 
-  bool setup(PairingHandler *pairing_handler                = nullptr,
-             GotConnectionHandler *got_connection_handler   = nullptr,
+  bool setup(PairingHandler        *pairing_handler         = nullptr,
+             GotConnectionHandler  *got_connection_handler  = nullptr,
              LostConnectionHandler *lost_connection_handler = nullptr);
   void devices_scan(int seconds_wait_time = 5);
 
   inline uint8_t get_battery_level() { return battery_level_; }
-  inline bool is_connected() { return connected_; }
-  inline bool wait_for_low_event(KeyInfo &inf, TickType_t duration = portMAX_DELAY) {
+  inline bool    is_connected() { return connected_; }
+  inline bool    wait_for_low_event(KeyInfo &inf, TickType_t duration = portMAX_DELAY) {
     return xQueueReceive(event_queue_, &inf, duration);
   }
 
-  char wait_for_ascii_char(bool forever = true);
+  char        wait_for_ascii_char(bool forever = true);
   inline char get_ascii_char() { return wait_for_ascii_char(false); }
-  void show_bonded_devices();
-  void remove_all_bonded_devices();
+  void        show_bonded_devices();
+  void        remove_all_bonded_devices();
 
 private:
-  static constexpr char const *TAG = "BTKeyboard";
+  static constexpr char const *TAG          = "BTKeyboard";
 
   static const esp_bt_mode_t HIDH_IDLE_MODE = (esp_bt_mode_t)0x00;
   static const esp_bt_mode_t HIDH_BLE_MODE  = (esp_bt_mode_t)0x01;
@@ -99,11 +131,11 @@ private:
   static const esp_bt_mode_t HIDH_BTDM_MODE = (esp_bt_mode_t)0x03;
 
 #if CONFIG_BT_HID_HOST_ENABLED
-#if CONFIG_BT_BLE_ENABLED
+  #if CONFIG_BT_BLE_ENABLED
   static const esp_bt_mode_t HID_HOST_MODE = HIDH_BTDM_MODE;
-#else
+  #else
   static const esp_bt_mode_t HID_HOST_MODE = HIDH_BT_MODE;
-#endif
+  #endif
 #elif CONFIG_BT_BLE_ENABLED
   static const esp_bt_mode_t HID_HOST_MODE = HIDH_BLE_MODE;
 #else
@@ -114,20 +146,20 @@ private:
   static SemaphoreHandle_t ble_hidh_cb_semaphore_;
 
   struct esp_hid_scan_result_t {
-    esp_bd_addr_t bda;
-    std::string name;
-    int8_t rssi;
-    esp_hid_usage_t usage;
+    esp_bd_addr_t       bda;
+    std::string         name;
+    int8_t              rssi;
+    esp_hid_usage_t     usage;
     esp_hid_transport_t transport; // BT, BLE or USB
 
     union {
       struct {
-        esp_bt_cod_t cod;
+        esp_bt_cod_t  cod;
         esp_bt_uuid_t uuid;
       } bt;
       struct {
         esp_ble_addr_type_t addr_type;
-        uint16_t appearance;
+        uint16_t            appearance;
       } ble;
     };
   };
@@ -141,11 +173,11 @@ private:
   size_t num_ble_scan_results_;
 
   QueueHandle_t event_queue_;
-  int8_t battery_level_;
-  bool key_avail_[MAX_KEY_DATA_SIZE];
-  char last_ch_;
-  TickType_t repeat_period_;
-  bool caps_lock_;
+  int8_t        battery_level_;
+  bool          key_avail_[MAX_KEY_DATA_SIZE];
+  char          last_ch_;
+  TickType_t    repeat_period_;
+  bool          caps_lock_;
 
   static const char *gap_bt_prop_type_names_[];
   static const char *ble_gap_evt_names_[];
@@ -154,11 +186,11 @@ private:
 
   static const char shift_trans_dict_[];
 
-  static BTKeyboard *bt_keyboard_;
-  static PairingHandler *pairing_handler_;
-  static GotConnectionHandler *got_connection_handler_;
+  static BTKeyboard            *bt_keyboard_;
+  static PairingHandler        *pairing_handler_;
+  static GotConnectionHandler  *got_connection_handler_;
   static LostConnectionHandler *lost_connection_handler_;
-  static bool connected_;
+  static bool                   connected_;
 
   static void hidh_callback(void *handler_args, esp_event_base_t base, int32_t id,
                             void *event_data);
@@ -174,7 +206,7 @@ private:
   static const char *ble_key_type_str(esp_ble_key_type_t key_type);
 
   void handle_bt_device_result(esp_bt_gap_cb_param_t *param);
-  void handle_ble_device_result(esp_ble_gap_cb_param_t *scan_rst);
+  void handle_ble_device_result(esp_ble_gap_cb_param_t *param);
 
   esp_hid_scan_result_t *find_scan_result(esp_bd_addr_t bda, ScanResult &results);
 
